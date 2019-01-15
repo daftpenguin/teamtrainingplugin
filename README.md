@@ -48,6 +48,6 @@ This plugin will not auto-update when new versions are released. For now, if you
 
 ## Problems or Suggestions?
 
-The best method to contact me is probably on Discord (DaftPenguin#5103). Twitter also works, but I'm a bit of a Twitter noob.
+The best method to contact me is probably on Discord (DaftPenguin#5103), Reddit (https://www.reddit.com/user/DaftPenguinRL), or Twitter (https://twitter.com/penguindaft).
 
 Enjoy.

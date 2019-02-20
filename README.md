@@ -1,6 +1,6 @@
 # Team Training Plugin
 
-- ![#f03c15](https://placehold.it/15/f03c15/000000?text=+) `Plugin is likely broken by update v1.58. I should have this fixed shortly.`
+`Plugin is likely broken by update v1.58. I should have this fixed shortly.`
 
 **Warning:** The initial release of this plugin is a very early version and there's potential that it may crash your game. To be safe, I recommend that you restart Rocket League and BakkesMod before jumping into ranked after using this plugin. It also lacks many features I wanted to add before releasing, but unfortunately life got in the way so I'm releasing it in its current state.
 

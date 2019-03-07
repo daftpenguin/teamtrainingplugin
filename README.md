@@ -8,9 +8,9 @@ This plugin utilizes a feature in BakkesMod that allows players to host and join
 
 ## Installation
 
-### Install BakkesMod
-
 This may look like a lot to do, but it's mostly straight-forward and I attempted to make my instructions as thorough as possible.
+
+### Install BakkesMod
 
 This plugin requires BakkesMod which can be downloaded from: https://bakkesmod.com/download.php. Just extract the executable from the zip and run it. Your anti-malware program(s) will certainly warn you about BakkesMod (if it doesn't, find a new anti-malware program) as it modifies the memory of a running application, but it is safe to install.
 

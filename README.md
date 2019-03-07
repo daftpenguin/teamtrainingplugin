@@ -1,5 +1,7 @@
 # Team Training Plugin
 
+Source code: https://github.com/daftpenguin/teamtrainingpluginsrc
+
 **Warning:** The initial release of this plugin is a very early version and there's potential that it may crash your game. To be safe, I recommend that you restart Rocket League and BakkesMod before jumping into ranked after using this plugin. It also lacks many features I wanted to add before releasing, but unfortunately life got in the way so I'm releasing it in its current state.
 
 This plugin utilizes a feature in BakkesMod that allows players to host and join freeplay lobbies. In my testing, I found that sometimes the connection to the host may drop and attempts to reconnect did not work. Restarting both Rocket League and BakkesMod seemed to sometimes fix the problem.

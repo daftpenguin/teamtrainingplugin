@@ -1,0 +1,223 @@
+{
+	"name": "Passing (downfield right) by Wayprotein [0590-9035-801A-E423]",
+	"offense": 2,
+	"defense": 0,
+	"drills": [
+		{
+			"ball": {
+				"location": { "x": -3014.72, "y": -4496.03, "z": 100 },
+				"velocity": { "x": 1469.46, "y": -261.366, "z": -1255.29 },
+				"torque": { "x": 0, "y": 0, "z": 0 },
+				"rotation": { "pitch": 0, "yaw": 0, "roll": 0 }
+			},
+			"players": [
+				{
+					"role": "passer",
+					"boost": 33.000000,
+					"location": { "x": 583.964, "y": -5166.03, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": -35129, "roll": 0 }
+				},
+				{
+					"role": "shooter",
+					"boost": 33.000000,
+					"location": { "x": -3637.69, "y": -3049.91, "z": 17.0104 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": -99, "yaw": 15504, "roll": 0 }
+				}
+			]
+		},
+		{
+			"ball": {
+				"location": { "x": -1250.37, "y": -1362.21, "z": 503.993 },
+				"velocity": { "x": 353.817, "y": -1457.52, "z": -1.50286 },
+				"torque": { "x": 0, "y": 0, "z": 0 },
+				"rotation": { "pitch": 0, "yaw": 0, "roll": 0 }
+			},
+			"players": [
+				{
+					"role": "passer",
+					"boost": 33.000000,
+					"location": { "x": -57.3477, "y": -4911.56, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 20814, "roll": 0 }
+				},
+				{
+					"role": "shooter",
+					"boost": 33.000000,
+					"location": { "x": -3468, "y": 4144.31, "z": 38.4487 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 50390, "roll": 0 }
+				}
+			]
+		},
+		{
+			"ball": {
+				"location": { "x": 1776.57, "y": -3695.66, "z": 100.483 },
+				"velocity": { "x": 42.2971, "y": 347.375, "z": -5.48818 },
+				"torque": { "x": 0, "y": 0, "z": 0 },
+				"rotation": { "pitch": 0, "yaw": 0, "roll": 0 }
+			},
+			"players": [
+				{
+					"role": "passer",
+					"boost": 33.000000,
+					"location": { "x": 1526.15, "y": -4297.92, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 12596, "roll": 0 }
+				},
+				{
+					"role": "shooter",
+					"boost": 33.000000,
+					"location": { "x": -2162.77, "y": -1309.87, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 14904, "roll": 0 }
+				}
+			]
+		},
+		{
+			"ball": {
+				"location": { "x": -2905.7, "y": -1608.84, "z": 652.368 },
+				"velocity": { "x": -1825.48, "y": -1476.01, "z": -103.381 },
+				"torque": { "x": 0, "y": 0, "z": 0 },
+				"rotation": { "pitch": 0, "yaw": 0, "roll": 0 }
+			},
+			"players": [
+				{
+					"role": "passer",
+					"boost": 33.000000,
+					"location": { "x": -2097.9, "y": -4337.6, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 24536, "roll": 0 }
+				},
+				{
+					"role": "shooter",
+					"boost": 33.000000,
+					"location": { "x": -3593.46, "y": -1578.4, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 19017, "roll": 0 }
+				}
+			]
+		},
+		{
+			"ball": {
+				"location": { "x": 1975.7, "y": 3634.86, "z": 774.772 },
+				"velocity": { "x": 473.937, "y": -2290.67, "z": 219.791 },
+				"torque": { "x": 0, "y": 0, "z": 0 },
+				"rotation": { "pitch": 0, "yaw": 0, "roll": 0 }
+			},
+			"players": [
+				{
+					"role": "passer",
+					"boost": 33.000000,
+					"location": { "x": 869.192, "y": -1569.07, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 5406, "roll": 0 }
+				},
+				{
+					"role": "shooter",
+					"boost": 33.000000,
+					"location": { "x": 332.696, "y": -3637.58, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 12636, "roll": 0 }
+				}
+			]
+		},
+		{
+			"ball": {
+				"location": { "x": 3014.62, "y": 8.8399, "z": 100.483 },
+				"velocity": { "x": -292.082, "y": -1771.97, "z": -121.305 },
+				"torque": { "x": 0, "y": 0, "z": 0 },
+				"rotation": { "pitch": 0, "yaw": 0, "roll": 0 }
+			},
+			"players": [
+				{
+					"role": "passer",
+					"boost": 33.000000,
+					"location": { "x": 2847.18, "y": -3547.61, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 14764, "roll": 0 }
+				},
+				{
+					"role": "shooter",
+					"boost": 33.000000,
+					"location": { "x": -1155.14, "y": -2406.35, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 13734, "roll": 0 }
+				}
+			]
+		},
+		{
+			"ball": {
+				"location": { "x": -858.174, "y": -884.81, "z": 365.464 },
+				"velocity": { "x": 65.4289, "y": -2244.48, "z": 141.695 },
+				"torque": { "x": 0, "y": 0, "z": 0 },
+				"rotation": { "pitch": 0, "yaw": 0, "roll": 0 }
+			},
+			"players": [
+				{
+					"role": "passer",
+					"boost": 33.000000,
+					"location": { "x": 124.937, "y": -4907.41, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 20374, "roll": 0 }
+				},
+				{
+					"role": "shooter",
+					"boost": 33.000000,
+					"location": { "x": -3557.66, "y": 525.643, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 12264, "roll": 0 }
+				}
+			]
+		},
+		{
+			"ball": {
+				"location": { "x": -2318.69, "y": 4613.34, "z": 100.483 },
+				"velocity": { "x": 965.194, "y": -1324.63, "z": 1465.37 },
+				"torque": { "x": 0, "y": 0, "z": 0 },
+				"rotation": { "pitch": 0, "yaw": 0, "roll": 0 }
+			},
+			"players": [
+				{
+					"role": "passer",
+					"boost": 33.000000,
+					"location": { "x": 2264.02, "y": -1307.89, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 23771, "roll": 0 }
+				},
+				{
+					"role": "shooter",
+					"boost": 33.000000,
+					"location": { "x": -2558.35, "y": -1946.54, "z": 53.6192 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 17046, "roll": 0 }
+				}
+			]
+		},
+		{
+			"ball": {
+				"location": { "x": 2403.54, "y": 1829.62, "z": 100.483 },
+				"velocity": { "x": 2066.27, "y": -2027.02, "z": -176.058 },
+				"torque": { "x": 0, "y": 0, "z": 0 },
+				"rotation": { "pitch": 0, "yaw": 0, "roll": 0 }
+			},
+			"players": [
+				{
+					"role": "passer",
+					"boost": 33.000000,
+					"location": { "x": 3237.82, "y": -3904.29, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 10157, "roll": 0 }
+				},
+				{
+					"role": "shooter",
+					"boost": 33.000000,
+					"location": { "x": -2604.96, "y": 123.496, "z": 37.9956 },
+					"velocity": { "x": 0, "y": 0, "z": 0 },
+					"rotation": { "pitch": 0, "yaw": 15272, "roll": 0 }
+				}
+			]
+		}
+	]
+}

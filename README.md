@@ -1,55 +1,49 @@
-# Team Training Plugin
+A Bakkesmod plugin for multiplayer custom training drills.
 
-Source code: https://github.com/daftpenguin/teamtrainingpluginsrc
+Note: I'll be releasing an update soon that will add a UI for a better user experience.
 
-**Warning:** The initial release of this plugin is a very early version and there's potential that it may crash your game. To be safe, I recommend that you restart Rocket League and BakkesMod before jumping into ranked after using this plugin. It also lacks many features I wanted to add before releasing, but unfortunately life got in the way so I'm releasing it in its current state.
+# Usage
 
-This plugin utilizes a feature in BakkesMod that allows players to host and join freeplay lobbies. In my testing, I found that sometimes the connection to the host may drop and attempts to reconnect did not work. Restarting both Rocket League and BakkesMod seemed to sometimes fix the problem.
+This plugin depends on [Rocket Plugin](https://bakkesplugins.com/plugins/view/26) for hosting a freeplay session that other players may join. Please consult their documentation on how to do this.
 
-## Installation
+Once all players have joined the freeplay session, press F6 to bring up the console.
 
-This may look like a lot to do, but it's mostly straight-forward and I attempted to make my instructions as thorough as possible.
+To list available training packs, run in console: `team_train_list`
 
-### Install BakkesMod
+To load a training pack, run: `team_train_load <pack>`, replacing pack with the name of the pack file (eg: `team_train_load left` to load left.json)
 
-This plugin requires BakkesMod which can be downloaded from: https://bakkesmod.com/download.php. Just extract the executable from the zip and run it. Your anti-malware program(s) will certainly warn you about BakkesMod (if it doesn't, find a new anti-malware program) as it modifies the memory of a running application, but it is safe to install.
+To shift the roles of each player (eg: passer becomes shooter, shooter becomes passer), run: `team_train_cycle_players`. This will change in the future once I get the UI figured out.
 
-### Allowing Players to Connect to the Host
+To randomly shuffle the roles of each player, run: `team_train_randomize_players`.
 
-For others to connect to your freeplay lobby, they either need to be in the same local network as you, or you need to mess with forwarding ports in your router and/or firewall. An easier solution is to setup a VPN for everyone to connect to. I found Radmin-VPN to be very easy to setup and use, but you're free to use whatever solution you prefer (instructions assume you're using Radmin-VPN).
+There also exists commands `team_train_reset`, `team_train_next`, and `team_train_prev` to reset the shot, switch to the next shot, or go back to the previous shot. When a training pack is loaded, reset is binded to d-pad up/num key 1, and prev and next are binded to d-pad left/num key 2 and d-pad right/num key 3.
 
-To install Radmin-VPN, download and install it from: https://www.radmin-vpn.com. Have one player `Create a new network` in Radmin-VPN found in the `Network` menu, set the name and password of the network and create it (the host of the freeplay server does not have to be the one who creates the network). Any other player that wants to join the freeplay server must choose `Join an existing network` also found in the `Network` menu and use the name and password chosen by the creator.
+Set `cl_team_training` to 1 to randomize the shots in the training pack, and `cl_team_training_countdown` to any number of seconds to wait before setting the ball in motion.
 
-### Install Team Training Plugin
+The plugin comes packaged with three packs: left, right, and infield. These packs were generated from Wayprotein's passing packs: C833-6A35-A46A-7191, 0590-9035-801A-E423, CDBB-8953-C052-654F. Note the shooter positions are a little awkward as they are positioned after the pass is in progress.
 
-Only the freeplay host has to install the plugin, and it'll work fine if a non-host user also has the plugin installed.
+# Creating Team Training Packs
 
-Download the plugin files from https://github.com/daftpenguin/teamtrainingplugin/archive/master.zip
+Team training packs can be created using regular custom training packs. The way this works is by generating each player's position in subsequent drills within the custom training pack, and the ball's state is taken from the first passer.
 
-Now open BakkesMod and from the `File` menu, select `Open BakkesMod Folder`. In the zip file containing the plugin files, you will see 3 folders: `cfg`, `plugins`, and `teamtraining`. Extract everything from the zip file into any directory, then copy and paste the 3 folders into the BakkesMod folder that you opened via BakkesMod.
+For example, suppose you want to create a training pack with two passers, one shooter, and one defender. The first drill in the custom training pack should be the starting position of the shooter. The second drill should be the position of the second passer (who receives the pass from the first passer). The third drill will be the position of the first passer, and the ball position and trajectory is taken from this drill. The final drill will be the position of the defender. Repeat this same pattern of drills to have more than one drill in the team training pack. For three drills in the team training pack, the order of drills in the custom training pack will be as follows:
 
-### Optional: Setup BakkesMod to Autoload Plugin
+- Drill #1: Shooter position
+- Drill #2: Second passer position
+- Drill #3: First passer position and ball position/trajectory
+- Drill #4: Defender
+- Drill #5: Shooter position
+- Drill #6: Second passer position
+- Drill #7: First passer position and ball position/trajectory
+- Drill #8: Defender
+- Drill #9: Shooter position
+- Drill #10: Second passer position
+- Drill #11: First passer position and ball position/trajectory
+- Drill #12: Defender
 
-By default, BakkesMod does not automatically load the plugin and therefore you must enter `plugin load teamtrainingplugin` into the BakkesMod console every time you want to use it. Alternatively, you can add the `plugin load teamtrainingplugin` to the `plugins.cfg` file that you can find in the `cfg` folder inside of the BakkesMod folder.
+To convert the custom training pack into a team training pack, the plugin comes with a `write_shot_info` command that can be run from the console. You must pass in 4 arguments to this command: the number of offensive players, the number of defensive players, the total number of drills that will be in the final team training pack, and a name for the training pack file (don't use spaces). To convert the custom training pack described above, you would run `write_shot_info 3 1 3`, as there are 3 offensive players, 1 defensive player, and 3 team training drills. For each shooting drill, you will need to supply some sort of user input in order for the ball position and trajectory to be recorded. No user input is needed for any of the other drills.
 
-## Using Team Training Plugin
+# Contact
 
-This plugin requires you to first launch a freeplay server and for all the players to connect. To do this, the host user must first open the BakkesMod console `F6` and type `host` into the console and press enter. This will launch the host user into a freeplay lobby. Now every other non-host player must open the BakkesMod console and type `connect 1.1.1.1`, replacing `1.1.1.1` with the IP address that Radmin-VPN assigned to the host, and press enter. The IP the VPN assigns to each user is located at the top of their Radmin-VPN window, and each user must use the IP that is **assigned to the host user** (the IP at the top of the host's Radmin-VPN window, not their own).
-
-Once each user is connected to the freeplay lobby, the host user can now load any packs found in the `teamtraining` folder included in the download files for the plugin. Currently, the only pack included is a 2 player training pack (note: the last shot is broken) and can only be used with 2 players connected to the lobby (will remove this limitation in the future). This pack was generated from Wayprotein's downfield-left passing pack (0590-9035-801A-E423 - https://www.youtube.com/watch?v=dGQKmn-A2W8). To load the pack, the host user can type `team_train_load pack1` into the BakkesMod console and press enter. When more packs are added, you can load them by changing `pack1` to the name of the pack file in the `teamtraining` folder (will add the ability to browse and select packs later).
-
-Loading the pack will start the first drill. By default, when the shot is set, the ball is frozen for 1 second before it starts to move, but players will still be able to move their cars. You may adjust the number of seconds the ball is frozen by typing `cl_team_training_countdown 5`, replacing 5 with any number between 0 and 10, and pressing enter in the BakkesMod console.
-
-The default key bindings are defined in the `cfg/team_training.cfg` file. By default, pressing d-pad up will reset the shot, d-pad left will go to the previous shot, and d-pad right will advance to the next shot. Unfortunately, I was not able to reset the shot using whatever button you have configured to reset shots in your controller settings. I hope to figure this out in the future.
-
-The choosing of what position to put each player is based on the order in which they connect to the lobby. The first player (host) will be the first passer, if there's a second passer, the second player will be the second passer, else they will be the shooter. If the pack includes defenders, then every player after the shooter will be a defender. It's a bit clunky right now and I will update it in the future, but you currently can change the ordering by typing `team_train_randomize_players`. This will just randomize their ordering and could result in the same ordering. You can also use `team_train_cycle_players` to move each player to the next position in the order (passer1 becomes passer2 or shooter, shooter becomes defender1 or passer1). This will change in the future.
-
-## Updates
-
-This plugin will not auto-update when new versions are released. For now, if you would like to be notified when new versions are released I will tweet them https://twitter.com/penguindaft until I find a better solution. Otherwise, I will be pushing all new versions here on GitHub.
-
-## Problems or Suggestions?
-
-The best method to contact me is probably on Discord (DaftPenguin#5103), Reddit (https://www.reddit.com/user/DaftPenguinRL), or Twitter (https://twitter.com/penguindaft).
-
-Enjoy.
+* [@PenguinDaft](twitter.com/PenguinDaft)
+* Discord: DaftPenguin#5103

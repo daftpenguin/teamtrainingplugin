@@ -10,7 +10,7 @@ Once all players have joined the freeplay session, press F6 to bring up the cons
 
 To list available training packs, run in console: `team_train_list`
 
-To load a training pack, run: `team_train_load <pack>`, replacing pack with the name of the pack file (eg: `team_train_load left` to load left.json)
+To load a training pack, run: `team_train_load pack`, replacing pack with the name of the pack file (eg: `team_train_load left` to load left.json)
 
 To shift the roles of each player (eg: passer becomes shooter, shooter becomes passer), run: `team_train_cycle_players`. This will change in the future once I get the UI figured out.
 
@@ -41,7 +41,7 @@ For example, suppose you want to create a training pack with two passers, one sh
 - Drill #11: First passer position and ball position/trajectory
 - Drill #12: Defender
 
-To convert the custom training pack into a team training pack, the plugin comes with a `write_shot_info` command that can be run from the console. You must pass in 4 arguments to this command: the number of offensive players, the number of defensive players, the total number of drills that will be in the final team training pack, and a name for the training pack file (don't use spaces). To convert the custom training pack described above, you would run `write_shot_info 3 1 3`, as there are 3 offensive players, 1 defensive player, and 3 team training drills. For each shooting drill, you will need to supply some sort of user input in order for the ball position and trajectory to be recorded. No user input is needed for any of the other drills.
+To convert the custom training pack into a team training pack, the plugin comes with a `write_shot_info` command that can be run from the console. You must pass in 4 arguments to this command: the number of offensive players, the number of defensive players, the total number of drills that will be in the final team training pack, and a name for the training pack file (don't use spaces). To convert the custom training pack described above, you would run `write_shot_info 3 1 3 filename`, as there are 3 offensive players, 1 defensive player, and 3 team training drills. For each shooting drill, you will need to supply some sort of user input in order for the ball position and trajectory to be recorded. No user input is needed for any of the other drills.
 
 # Contact
 

@@ -1,21 +1,23 @@
-// TODO: Make custom training extraction tool fully automated (Bakkes shared a tool for this, but no source)
 // TODO: Defenders only drills, allow for consecutive or even simultenous shots (multiple balls) to be taken on net that you have to save
 // TODO: Add targets to passes and shots, and add single player or no shooter mode to practice these drills when you don't have enough offensive players
 // TODO: Add target on ball that moves based on the player position and ball position in order to hit the ball perfectly at a target
 
 #include "TeamTrainingPlugin.h"
+
 #include "bakkesmod\wrappers\includes.h"
 #include "bakkesmod\wrappers\GameEvent\ReplayDirectorWrapper.h"
 #include "bakkesmod\wrappers\WrapperStructs.h"
 #include "utils\parser.h"
+
 #include <algorithm>
 #include <random>
-#include <filesystem>
+#include <experimental\filesystem>
+
 namespace fs = std::experimental::filesystem;
 
 #pragma comment (lib, "Ws2_32.lib")
 
-BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Adds team custom training to freeplay", "0.1", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
+BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.1", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
 
 const std::string CVAR_PREFIX("cl_team_training_");
 
@@ -60,6 +62,8 @@ void TeamTrainingPlugin::onLoad()
 
 	cvarManager->registerNotifier("write_shot_info", std::bind(&TeamTrainingPlugin::writeShotInfo, this, std::placeholders::_1),
 		"Print car and ball location of current training drill", PERMISSION_CUSTOM_TRAINING | PERMISSION_PAUSEMENU_CLOSED);
+	cvarManager->registerNotifier("team_train_internal_convert", std::bind(&TeamTrainingPlugin::internalConvert, this, std::placeholders::_1),
+		"Converts custom training pack into team training pack (intended for internal use through GUI)", PERMISSION_CUSTOM_TRAINING | PERMISSION_PAUSEMENU_CLOSED);
 
 	// Random commands that may be useful for team training?
 	//cvarManager->registerNotifier("team_train_add_ball", std::bind(&TeamTrainingPlugin::addNewBall, this, std::placeholders::_1),
@@ -85,6 +89,8 @@ void TeamTrainingPlugin::onUnload()
 
 void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 {
+	cvarManager->log("Team training now has a UI. F2 -> Plugins -> Team Training Plugin and click the button :)");
+
 	if (!gameWrapper->IsInFreeplay()) {
 		return;
 	}
@@ -103,13 +109,19 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 		return;
 	}
 
+	std::string pack_name = params[1];
+	if (pack_name.size() < 5 || pack_name.substr(pack_name.size() - 5).compare(".json") != 0) {
+		pack_name += ".json";
+	}
+	
 	this->pack = std::make_shared<TrainingPack>(params[1], cvarManager);
-	if (pack->name.empty() && pack->offense > 0 ) {
+	if (this->pack->filepath == "") {
+		this->pack = NULL;
 		cvarManager->log("Given training pack is either invalid or does not exist");
 		return;
 	}
 
-	cvarManager->log("Loaded training pack: " + pack->name);
+	cvarManager->log("Loaded training pack: " + this->pack->filepath);
 	if (cvarManager->getCvar(CVAR_PREFIX + "randomize").getBoolValue()) {
 		auto rng = std::default_random_engine{};
 		std::shuffle(std::begin(pack->drills), std::end(pack->drills), rng);
@@ -120,6 +132,7 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 	}
 
 	ArrayWrapper<CarWrapper> cars = tutorial.GetCars();
+	player_order.clear();
 	for (int i = 0; i < cars.Count(); i++) {
 		player_order.push_back(i);
 	}
@@ -129,7 +142,6 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 
 void TeamTrainingPlugin::onFreeplayDestroyed(std::string eventName)
 {
-	cvarManager->log("Freeplay destroyed");
 	cvarManager->loadCfg("team_training_bindings_backup.cfg");
 	pack = NULL;
 }
@@ -155,7 +167,6 @@ void TeamTrainingPlugin::setShot(int shot)
 		return;
 	}
 
-	cvarManager->log("Setting shot " + std::to_string(shot));
 	current_shot = shot;
 
 	TrainingPackDrill drill = pack->drills[shot];
@@ -167,19 +178,13 @@ void TeamTrainingPlugin::setShot(int shot)
 	BallWrapper ball = balls.Get(0);
 	ArrayWrapper<CarWrapper> cars = tutorial.GetCars();
 
-	cvarManager->log("Got cars and ball");
-
 	// Stop all cars and ball
 	for (int i = 0; i < cars.Count(); i++) {
 		cars.Get(i).Stop();
 	}
 	ball.Stop();
 
-	cvarManager->log("Stopped cars and ball");
-
 	ball.SetLocation(drill.ball.location);
-
-	cvarManager->log("Setting passer positions");
 
 	int i = 0;
 	for (auto player : drill.passers) {
@@ -191,17 +196,13 @@ void TeamTrainingPlugin::setShot(int shot)
 		setPlayerToCar(player, car);
 	}
 
-	cvarManager->log("Setting shooter position");
-
 	if (i >= cars.Count()) {
-		cvarManager->log("Lost our shooter");
+		cvarManager->log("Cannot find shooter");
 		return;
 	}
 
 	setPlayerToCar(drill.shooter, cars.Get(player_order[i++]));
 	
-	cvarManager->log("Setting countdown for shot start");
-
 	float countdown = cvarManager->getCvar(CVAR_PREFIX + "countdown").getFloatValue();
 	gameWrapper->SetTimeout([&, &_cvarManager = cvarManager, shot_set](GameWrapper *gw) {
 		if (!gameWrapper->IsInFreeplay()) {
@@ -225,7 +226,6 @@ void TeamTrainingPlugin::setShot(int shot)
 
 void TeamTrainingPlugin::randomizePlayers(std::vector<std::string> params)
 {
-	cvarManager->log("Randomizing players");
 	auto rng = std::default_random_engine{};
 	std::shuffle(std::begin(player_order), std::end(player_order), rng);
 	cvarManager->log("Player order: " + vectorToString(player_order));
@@ -234,7 +234,6 @@ void TeamTrainingPlugin::randomizePlayers(std::vector<std::string> params)
 
 void TeamTrainingPlugin::cyclePlayers(std::vector<std::string> params)
 {
-	cvarManager->log("Cycling players");
 	unsigned int first = player_order.front();
 	for (int i = 0; i < player_order.size() - 1; i++) {
 		player_order[i] = player_order[i + 1];
@@ -246,18 +245,12 @@ void TeamTrainingPlugin::cyclePlayers(std::vector<std::string> params)
 
 void TeamTrainingPlugin::listPacks(std::vector<std::string> params)
 {
-	vector<std::string> packs;
-
-	for (const auto & entry : fs::directory_iterator(".\\bakkesmod\\data\\teamtraining\\")) {
-		if (entry.path().has_extension() && entry.path().extension() == ".json") {
-			packs.push_back(entry.path().filename().string());
-		}
-	}
+	auto const& packs = getTrainingPacks();
 
 	if (packs.size() > 0) {
 		cvarManager->log("Available team training packs:");
-		for (auto pack : packs) {
-			cvarManager->log(pack);
+		for (auto const& pack : packs) {
+			cvarManager->log(pack.first);
 		}
 	}
 	else {
@@ -280,8 +273,6 @@ void TeamTrainingPlugin::resetShot()
 	if (!gameWrapper->IsInFreeplay()) {
 		return;
 	}
-
-	cvarManager->log("Resetting shot " + std::to_string(current_shot));
 
 	setShot(current_shot);
 }
@@ -342,8 +333,36 @@ Rotator cloneRotation(Rotator r) {
 	return Rotator(r.Pitch, r.Yaw, r.Roll);
 }
 
+void TeamTrainingPlugin::internalConvert(std::vector<std::string> params) {
+	if (!gameWrapper->IsInCustomTraining()) {
+		cvarManager->log("Not in custom training");
+		return;
+	}
+
+	this->offense = std::atoi(params[1].c_str());
+	this->defense = std::atoi(params[2].c_str());
+	this->num_drills = std::atoi(params[3].c_str());
+	this->drills_written = 0;
+
+	std::string filename = params[4];
+	std::string creator = params[5];
+	std::string description = params[6];
+	std::string code = params[7];
+
+	cvarManager->log("Saving data for pack: " + filename);
+	custom_training_export_file.open("bakkesmod\\data\\teamtraining\\" + filename + ".json");
+	custom_training_export_file
+		<< "{\n\"version\": 2,\n\t\"description\": \"" << description << "\",\n"
+		<< "\t\"creator\": \"" << creator << "\",\n"
+		<< "\t\"code\": \"" << code << "\",\n"
+		<< "\t\"offense\": " << offense << ",\n\t\"defense\": " << defense << ",\n\t\"drills\": [\n";
+	getNextShot();
+}
+
 void TeamTrainingPlugin::writeShotInfo(std::vector<std::string> params)
 {
+	cvarManager->log("Team training now has a UI. F2 -> Plugins -> Team Training Plugin and click the button :)");
+
 	if (!gameWrapper->IsInCustomTraining()) {
 		cvarManager->log("Not in custom training");
 		return;
@@ -408,6 +427,7 @@ void TeamTrainingPlugin::getNextShot()
 		custom_training_ball.location = ball.GetLocation().clone();
 		custom_training_ball.rotation = cloneRotation(ball.GetRotation());
 		gameWrapper->HookEventWithCaller<ServerWrapper>("Function GameEvent_Soccar_TA.Active.Tick", std::bind(&TeamTrainingPlugin::onBallTick, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+		gameWrapper->GetPlayerController().ToggleBoost(1);
 	}
 	else {
 		// Not first shot in drill, write to file if drill is complete, then move to the next shot
@@ -421,13 +441,11 @@ void TeamTrainingPlugin::getNextShot()
 
 void TeamTrainingPlugin::onNextRound(std::string eventName)
 {
-	cvarManager->log("next round");
 	getNextShot();
 }
 
 void TeamTrainingPlugin::writeDrillToFile()
 {
-	cvarManager->log("Writing drill to file");
 
 	// Sure I should have used the json library, but this got the job done... Don't judge me :(
 	custom_training_export_file
@@ -451,7 +469,6 @@ void TeamTrainingPlugin::writeDrillToFile()
 		<< "\n\t\t\t]\n\t\t}";
 
 	custom_training_players.clear();
-	cvarManager->log("Wrote drill " + std::to_string(drills_written + 1) + " of " + std::to_string(num_drills));
 	if (++drills_written < num_drills) {
 		custom_training_export_file << ",\n";
 		gameWrapper->SetTimeout([&, &_cvarManager = cvarManager](GameWrapper *gw) {
@@ -471,6 +488,7 @@ void TeamTrainingPlugin::onBallTick(ServerWrapper server, void * params, std::st
 	Vector v = ball.GetVelocity();
 	if (v.X != 0 || v.Y != 0 || v.Z != 0) {
 		gameWrapper->UnhookEvent("Function GameEvent_Soccar_TA.Active.Tick");
+		gameWrapper->GetPlayerController().ToggleBoost(0);
 		custom_training_ball.velocity = ball.GetVelocity().clone();
 		if (defense == 0) {
 			writeDrillToFile();
@@ -522,4 +540,17 @@ void TeamTrainingPlugin::twoBallTraining(std::vector<std::string> params)
 		ball2.SetLocation(Vector(-644.42, 5077.22, 100.48));
 		ball2.SetVelocity(Vector(3063.11, -860.333, -341.428));
 	}, 2.0f);
+}
+
+std::map<std::string, TrainingPack> TeamTrainingPlugin::getTrainingPacks() {
+	std::map<std::string, TrainingPack> packs;
+
+	for (const auto & entry : fs::directory_iterator(".\\bakkesmod\\data\\teamtraining\\")) {
+		if (entry.path().has_extension() && entry.path().extension() == ".json") {
+			//packs[entry.path().filename().string()] = TrainingPack(entry.path().string(), cvarManager);
+			packs.emplace(entry.path().filename().string(), TrainingPack(entry.path().string(), cvarManager));
+		}
+	}
+
+	return packs;
 }

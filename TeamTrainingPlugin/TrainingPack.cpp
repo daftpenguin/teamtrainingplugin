@@ -3,41 +3,56 @@
 #include <sstream>
 #include <Windows.h>
 
-static inline bool file_exists(const std::string &file_path)
+static inline bool file_exists(const std::string &filepath)
 {
-	GetFileAttributes(file_path.c_str());
-	return !(INVALID_FILE_ATTRIBUTES == GetFileAttributes(file_path.c_str()) && GetLastError() == ERROR_FILE_NOT_FOUND);
+	GetFileAttributes(filepath.c_str());
+	return !(INVALID_FILE_ATTRIBUTES == GetFileAttributes(filepath.c_str()) && GetLastError() == ERROR_FILE_NOT_FOUND);
 }
 
-TrainingPack::TrainingPack(std::string file_path, std::shared_ptr<CVarManagerWrapper> cvarManager)
+TrainingPack::TrainingPack(std::string filepath, std::shared_ptr<CVarManagerWrapper> cvarManager)
 {
-	if (file_exists(file_path)) {
-		load(file_path, cvarManager);
+	this->filepath = "";
+	if (file_exists(filepath)) {
+		load(filepath, cvarManager);
 	}
 	else {
-		file_path = ".\\bakkesmod\\data\\teamtraining\\" + file_path + ".json";
-		if (file_exists(file_path)) {
-			load(file_path, cvarManager);
+		filepath = ".\\bakkesmod\\data\\teamtraining\\" + filepath;
+		if (file_exists(filepath)) {
+			load(filepath, cvarManager);
 		}
 		else {
-			cvarManager->log("Failed to find pack at " + file_path);
+			cvarManager->log("Failed to find pack at " + filepath);
 			return;
 		}
 	}
 }
 
-void TrainingPack::load(std::string file_path, std::shared_ptr<CVarManagerWrapper> cvarManager)
+void TrainingPack::load(std::string filepath, std::shared_ptr<CVarManagerWrapper> cvarManager)
 {
 	std::ifstream inFile;
-	inFile.open(file_path);
+	inFile.open(filepath);
 
 	std::stringstream ss;
 	ss << inFile.rdbuf();
 	json js = json::parse(ss.str());
 
-	name = js["name"].get<std::string>();
+	if (js.find("version") == js.end()) {
+		// If no version exists, first version which only contains name, offense, and defense
+		description = js["name"].get<std::string>();
+		version = 1;
+	}
+	else {
+		version = js["version"].get<unsigned int>();
+		if (version == 2) {
+			description = js["description"].get<std::string>();
+			creator = js["creator"].get<std::string>();
+			code = js["code"].get<std::string>();
+		}
+	}
+
 	offense = js["offense"].get<unsigned int>();
 	defense = js["defense"].get<unsigned int>();
+	this->filepath = filepath;
 
 	for (json js_drill : js["drills"]) {
 		drills.push_back(parseDrill(js_drill, cvarManager));

@@ -1,0 +1,9 @@
+Team Training Plugin
+8 |
+9 | Drill countdown (in seconds)
+12 | ##countdown |cl_team_training_countdown
+9 | Randomize drills:
+12 | ##randomize |cl_team_training
+8 |
+8 |
+0 | Open Team Training GUI | plugin load teamtrainingplugin; togglemenu teamtrainingplugin

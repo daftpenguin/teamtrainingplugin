@@ -2,7 +2,7 @@
 
 #include "bakkesmod/wrappers/wrapperstructs.h"
 #include "bakkesmod/wrappers/CVarManagerWrapper.h"
-#include "nlohmann/json.h"
+#include "nlohmann/json.hpp"
 #include <string>
 #include <vector>
 
@@ -32,12 +32,16 @@ struct TrainingPackDrill {
 class TrainingPack
 {
 public:
-	TrainingPack(std::string file_path, std::shared_ptr<CVarManagerWrapper> cvarManager);
-	void load(std::string file_path, std::shared_ptr<CVarManagerWrapper> cvarManager);
+	TrainingPack(std::string filepath, std::shared_ptr<CVarManagerWrapper> cvarManager);
+	void load(std::string filepath, std::shared_ptr<CVarManagerWrapper> cvarManager);
 
-	std::string name;
-	unsigned int offense;
-	unsigned int defense;
+	std::string filepath;
+	unsigned int version = 0;
+	unsigned int offense = 0;
+	unsigned int defense = 0;
+	std::string description;
+	std::string creator;
+	std::string code;
 	std::vector<TrainingPackDrill> drills;
 
 private:

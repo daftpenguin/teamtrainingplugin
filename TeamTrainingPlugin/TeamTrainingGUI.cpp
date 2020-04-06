@@ -154,6 +154,7 @@ void TeamTrainingPlugin::Render()
 			ImGui::Text("Enter the number of offensive and defensive players below, and the ordering of each drill to the corresponding player position will show.");
 			ImGui::Text("Repeat this pattern for more than one drill in the team training pack.");
 			ImGui::Text("After creating the custom training pack, load it in, fill in all of the details below, then click the convert button.");
+			ImGui::Text("TURN OFF TRAINING VARIANCE BEFORE DOING CONVERSION");
 			ImGui::Separator();
 
 			if (errorMsgs["Creation"].size() > 0) {

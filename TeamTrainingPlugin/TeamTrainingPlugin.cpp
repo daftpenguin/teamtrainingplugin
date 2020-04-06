@@ -1,6 +1,5 @@
-// TODO: Defenders only drills, allow for consecutive or even simultenous shots (multiple balls) to be taken on net that you have to save
+// TODO: Defenders only drills, allow for consecutive or even simultaneous shots (multiple balls) to be taken on net that you have to save
 // TODO: Add targets to passes and shots, and add single player or no shooter mode to practice these drills when you don't have enough offensive players
-// TODO: Add target on ball that moves based on the player position and ball position in order to hit the ball perfectly at a target
 
 #include "TeamTrainingPlugin.h"
 
@@ -18,8 +17,6 @@ namespace fs = std::experimental::filesystem;
 #pragma comment (lib, "Ws2_32.lib")
 
 BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.1", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
-
-const std::string CVAR_PREFIX("cl_team_training_");
 
 std::string vectorString(Vector v) {
 	std::stringstream ss;
@@ -45,6 +42,7 @@ std::string vectorToString(std::vector<unsigned int> v) {
 
 void TeamTrainingPlugin::onLoad()
 {
+	// Usage
 	cvarManager->registerNotifier("team_train_load", std::bind(&TeamTrainingPlugin::onLoadTrainingPack, this, std::placeholders::_1), 
 		"Launches given team training pack", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
 	cvarManager->registerNotifier("team_train_reset", std::bind(&TeamTrainingPlugin::onResetShot, this, std::placeholders::_1),
@@ -53,26 +51,20 @@ void TeamTrainingPlugin::onLoad()
 		"Loads the next shot in the pack", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
 	cvarManager->registerNotifier("team_train_prev", std::bind(&TeamTrainingPlugin::onPrevShot, this, std::placeholders::_1),
 		"Loads the previous shot in the pack", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
+	cvarManager->registerNotifier("team_train_list", std::bind(&TeamTrainingPlugin::listPacks, this, std::placeholders::_1),
+		"Lists available packs", PERMISSION_ALL);
+
+	// Role assignment
 	cvarManager->registerNotifier("team_train_randomize_players", std::bind(&TeamTrainingPlugin::randomizePlayers, this, std::placeholders::_1),
 		"Randomizes the assignments of players to roles", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
 	cvarManager->registerNotifier("team_train_cycle_players", std::bind(&TeamTrainingPlugin::cyclePlayers, this, std::placeholders::_1),
 		"Cycles the assignments of players to roles", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
-	cvarManager->registerNotifier("team_train_list", std::bind(&TeamTrainingPlugin::listPacks, this, std::placeholders::_1),
-		"Lists available packs", PERMISSION_ALL);
 
+	// Creation
 	cvarManager->registerNotifier("write_shot_info", std::bind(&TeamTrainingPlugin::writeShotInfo, this, std::placeholders::_1),
 		"Print car and ball location of current training drill", PERMISSION_CUSTOM_TRAINING | PERMISSION_PAUSEMENU_CLOSED);
 	cvarManager->registerNotifier("team_train_internal_convert", std::bind(&TeamTrainingPlugin::internalConvert, this, std::placeholders::_1),
 		"Converts custom training pack into team training pack (intended for internal use through GUI)", PERMISSION_CUSTOM_TRAINING | PERMISSION_PAUSEMENU_CLOSED);
-
-	// Random commands that may be useful for team training?
-	//cvarManager->registerNotifier("team_train_add_ball", std::bind(&TeamTrainingPlugin::addNewBall, this, std::placeholders::_1),
-	//	"Spawns a new ball", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
-
-	/*
-	cvarManager->registerNotifier("team_train_two_ball_drill", std::bind(&TeamTrainingPlugin::twoBallTraining, this, std::placeholders::_1),
-		"Save the shot using the ball", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
-	*/
 	
 	// Variables
 	cvarManager->registerCvar(CVAR_PREFIX + "randomize", "0", "Randomize the shots in a training pack", true, true, 0, true, 1, true);
@@ -497,49 +489,6 @@ void TeamTrainingPlugin::onBallTick(ServerWrapper server, void * params, std::st
 			cvarManager->executeCommand("workshop_playlist_next;sv_training_next");
 		}
 	}
-}
-
-/* Random commands */
-
-void TeamTrainingPlugin::addNewBall(std::vector<std::string> params)
-{
-	ServerWrapper sw = gameWrapper->GetGameEventAsServer();
-	int balls = sw.GetTotalGameBalls();
-	sw.SetTotalGameBalls2(balls + 1);
-	sw.ResetBalls();
-}
-
-/* Experimental code below */
-
-void TeamTrainingPlugin::twoBallTraining(std::vector<std::string> params)
-{
-	ServerWrapper sw = gameWrapper->GetGameEventAsServer();
-	sw.SetTotalGameBalls2(2);
-	sw.ResetBalls();
-	ArrayWrapper<BallWrapper> balls = sw.GetGameBalls();
-	if (balls.Count() != 2) {
-		cvarManager->log("Something went wrong. Total number of balls is " + std::to_string(balls.Count()) + ", expecting 2 balls.");
-		return;
-	}
-
-	CarWrapper car = sw.GetCars().Get(0);
-	car.SetLocation(Vector(3704.04, 3386.56, 17.01));
-	car.SetRotation(Rotator(-100, 26220, 0));
-	car.Stop();
-
-	// TODO: Find better car and ball position
-	gameWrapper->SetTimeout([&, &_cvarManager = cvarManager](GameWrapper *gw) {
-		ServerWrapper sw = gameWrapper->GetGameEventAsServer();
-		ArrayWrapper<BallWrapper> balls = sw.GetGameBalls();
-
-		BallWrapper ball = balls.Get(0);
-		BallWrapper ball2 = balls.Get(1);
-		ball.SetLocation(Vector(1147.23, 4653.7, 100.48));
-		ball.SetVelocity(Vector(-554.356, -2820.86, 1287.35));
-
-		ball2.SetLocation(Vector(-644.42, 5077.22, 100.48));
-		ball2.SetVelocity(Vector(3063.11, -860.333, -341.428));
-	}, 2.0f);
 }
 
 std::map<std::string, TrainingPack> TeamTrainingPlugin::getTrainingPacks() {

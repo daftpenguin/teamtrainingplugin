@@ -21,11 +21,9 @@ void TeamTrainingPlugin::Render()
 	}
 
 	// TODO: Input should not be blocked if the window isn't in focus
+	// TODO: Allow users to upload packs
 
 	ImGuiWindowFlags windowFlags = 0; //| ImGuiWindowFlags_MenuBar;
-
-	// Custom Training Conversion
-	// After user enters off and def #'s, show pattern the drills should follow (we should also modify conversion to record ball position for each drill, now that we got it automated)
 
 	ImGui::SetNextWindowSizeConstraints(ImVec2(55 + 250 + 55 + 250 + 80 + 100, 600), ImVec2(FLT_MAX, FLT_MAX));
 	ImGui::Begin(GetMenuTitle().c_str(), &this->isWindowOpen, windowFlags);
@@ -33,6 +31,13 @@ void TeamTrainingPlugin::Render()
 	if (ImGui::BeginTabBar("Team Training", ImGuiTabBarFlags_None)) {
 		if (ImGui::BeginTabItem("Selection")) {
 			ImGui::Text("Be sure to start a multiplayer freeplay sessions via Rocket Plugin before loading a pack.");
+
+			if (errorMsgs["Creation"].size() > 0) {
+				for (auto err : errorMsgs["Selection"]) {
+					ImGui::Text(err.c_str());
+				}
+				ImGui::Separator();
+			}
 
 			auto packs = getTrainingPacks();
 			std::vector<std::string> pack_keys;
@@ -92,9 +97,16 @@ void TeamTrainingPlugin::Render()
 			if (!this->pack) {
 				ImGui::Text("No pack loaded");
 			} else {
-				ImGui::Text("Player role assignment is based on their order as they are \"seen\" by the server.");
-				ImGui::Text("Different events may change their ordering, like players getting demoed or disconnecting / reconnecting to the server.");
-				ImGui::Text("I may or may not fix this in a future update");
+				ImGui::Text("Player role assignments are based on their order as they are \"seen\" by the server.");
+				ImGui::Text("Different events may change their ordering, like players getting demolished or disconnecting then reconnecting to the server.");
+				ImGui::Text("I may or may not fix this in a future update.");
+
+				if (errorMsgs["Roles"].size() > 0) {
+					for (auto err : errorMsgs["Creation"]) {
+						ImGui::Text(err.c_str());
+					}
+					ImGui::Separator();
+				}
 
 				auto server = gameWrapper->GetGameEventAsServer();
 				auto cars = server.GetCars();
@@ -129,7 +141,11 @@ void TeamTrainingPlugin::Render()
 						ImGui::Text("Specatator");
 					}
 				}
+
+				ImGui::Separator();
+				ImGui::Text("Reset shot to use new order");
 			}
+
 			ImGui::EndTabItem();
 		}
 
@@ -139,6 +155,13 @@ void TeamTrainingPlugin::Render()
 			ImGui::Text("Repeat this pattern for more than one drill in the team training pack.");
 			ImGui::Text("After creating the custom training pack, load it in, fill in all of the details below, then click the convert button.");
 			ImGui::Separator();
+
+			if (errorMsgs["Creation"].size() > 0) {
+				for (auto err : errorMsgs["Creation"]) {
+					ImGui::TextColored(ImVec4(255, 0, 0, 255), err.c_str());
+				}
+				ImGui::Separator();
+			}
 
 			if (gameWrapper->IsInCustomTraining()) {
 				TrainingEditorSaveDataWrapper training = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address).GetTrainingData().GetTrainingData();
@@ -167,16 +190,16 @@ void TeamTrainingPlugin::Render()
 			ImGui::Text("Code: %s", code);
 
 			if (ImGui::Button("Convert")) {
-				errorMsg = "";
+				errorMsgs["Creation"].clear();
 				if (offensive_players + defensive_players == 0) {
-					errorMsg += "Need at least one offensive or defensive player. ";
+					errorMsgs["Creation"].push_back("Must have at least one player.");
 				}
-				if (filename == "") {
-					errorMsg += "Must specify a filename";
+				if (filename[0] == '\0') {
+					errorMsgs["Creation"].push_back("Must specify a filename.");
 				}
-				if (errorMsg != "") {
-					ImGui::Text(errorMsg.c_str());
-				} else {
+
+				if (errorMsgs["Creation"].size() == 0) {
+					errorMsgs["Creation"].clear();
 					std::string creatorEscaped(creator);
 					std::string descriptionEscaped(description);
 					boost::replace_all(descriptionEscaped, "\"", "\\\"");
@@ -185,7 +208,6 @@ void TeamTrainingPlugin::Render()
 					cmd_ss << "sleep 1; team_train_internal_convert " << offensive_players << " " << defensive_players << " " << gui_num_drills
 						<< " \"" << filename << "\" \"" << creator << "\" \"" << description << "\" \"" << code << "\"";
 					std::string cmd = cmd_ss.str();
-					cvarManager->log(cmd);
 					OnClose();
 					cvarManager->executeCommand(cmd);
 				}
@@ -206,6 +228,18 @@ void TeamTrainingPlugin::Render()
 			}
 			for (int i = 0; i < defensive_players; i++) {
 				ImGui::Text("Defender");
+			}
+
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Settings")) {
+			ImGui::Checkbox("Randomize", &randomize);
+			ImGui::InputText("Countdown after reset (in seconds)", countdown, IM_ARRAYSIZE(countdown), ImGuiInputTextFlags_CharsScientific);
+
+			if (ImGui::Button("Save")) {
+				cvarManager->executeCommand(CVAR_PREFIX + "randomize " + std::to_string(randomize));
+				cvarManager->executeCommand(CVAR_PREFIX + "countdown " + countdown);
 			}
 
 			ImGui::EndTabItem();
@@ -246,6 +280,11 @@ bool TeamTrainingPlugin::IsActiveOverlay()
 
 void TeamTrainingPlugin::OnOpen()
 {
+	randomize = cvarManager->getCvar(CVAR_PREFIX + "randomize").getBoolValue();
+	stringstream ss;
+	ss.precision(1);
+	ss << std::fixed << cvarManager->getCvar(CVAR_PREFIX + "countdown").getFloatValue();
+	strncpy(countdown, ss.str().c_str(), IM_ARRAYSIZE(countdown));
 	this->isWindowOpen = true;
 }
 

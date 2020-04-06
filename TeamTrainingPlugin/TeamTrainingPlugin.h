@@ -11,6 +11,8 @@
 
 using namespace placeholders;
 
+const std::string CVAR_PREFIX("cl_team_training_");
+
 class TeamTrainingPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginWindow
 {
 public:
@@ -58,12 +60,6 @@ private:
 	TrainingPackBall custom_training_ball;
 	std::vector<TrainingPackPlayer> custom_training_players;
 
-	// Random extra
-	void addNewBall(std::vector<std::string> params);
-	void twoBallTraining(std::vector<std::string> params);
-	Vector2 start;
-	Vector2 end;
-
 /*
  * GUI stuffs
  */
@@ -71,15 +67,23 @@ private:
 	bool isWindowOpen = false;
 	bool isMinimized = false;
 	bool shouldBlockInput = false;
-	std::string menuTitle = "Team Training";
-	std::string errorMsg = "";
+	std::string menuTitle = "Team Training (created by DaftPenguin)";
+	std::map<std::string, std::vector<std::string>> errorMsgs = {
+		{ "Selection", {}},
+		{ "Roles", {}},
+		{ "Creation", {}},
+	};
+	// Creation
 	int offensive_players = 0;
 	int defensive_players = 0;
 	int gui_num_drills = 1;
-	char filename[128];
-	char creator[128];
-	char description[500];
+	char filename[128] = "";
+	char creator[128] = "";
+	char description[500] = "";
 	char code[20] = "";
+	// Settings
+	bool randomize = false;
+	char countdown[10] = "1.0";
 	//ImGui::FileBrowser fileDialog = ImGui::FileBrowser(ImGuiFileBrowserFlags_CloseOnEsc | ImGuiFileBrowserFlags_SingleClickDir | ImGuiFileBrowserFlags_SortIgnoreCase);
 public:
 	void Render();

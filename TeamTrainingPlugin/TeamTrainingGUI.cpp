@@ -34,8 +34,9 @@ void TeamTrainingPlugin::Render()
 			ImGui::Text("Be sure to start a multiplayer freeplay session via Rocket Plugin before loading a pack.");
 
 			if (errorMsgs["Selection"].size() > 0) {
+				ImGui::Separator();
 				for (auto err : errorMsgs["Selection"]) {
-					ImGui::Text(err.c_str());
+					ImGui::TextColored(ImVec4(255, 0, 0, 255), err.c_str());
 				}
 				ImGui::Separator();
 			}
@@ -82,7 +83,15 @@ void TeamTrainingPlugin::Render()
 			
 			if (pack.errorMsg == "") {
 				if (ImGui::Button("Load Team Training Pack")) {
-					cvarManager->executeCommand("sleep 1; team_train_load " + pack_key);
+					errorMsgs["Selection"].clear();
+					auto cars = gameWrapper->GetGameEventAsServer().GetCars();
+					if (cars.Count() < pack.offense) {
+						errorMsgs["Selection"].push_back("Pack requires " + std::to_string(pack.offense) + " players but there are only " + std::to_string(cars.Count()) + " in the lobby.");
+					} else {
+						errorMsgs["Selection"].clear();
+						cvarManager->executeCommand("sleep 1; team_train_load " + pack_key);
+					}
+
 				}
 				if (pack.code != "") {
 					ImGui::SameLine();
@@ -194,22 +203,26 @@ void TeamTrainingPlugin::Render()
 			}
 
 			if (gameWrapper->IsInCustomTraining()) {
-				TrainingEditorSaveDataWrapper training = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address).GetTrainingData().GetTrainingData();
-				
-				if (strcmp(training.GetCode().ToString().c_str(), code) != 0) {
-					::strncpy(code, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(code));
-					::strncpy(filename, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(filename));
-					::strncpy(creator, training.GetCreatorName().ToString().c_str(), IM_ARRAYSIZE(creator));
-					::strncpy(description, training.GetTM_Name().ToString().c_str(), IM_ARRAYSIZE(description));
+				auto trainingMeta = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address).GetTrainingData();
+
+				if (trainingMeta.GetbUnowned() == 1) {
+					auto training = trainingMeta.GetTrainingData();
+					if (strcmp(training.GetCode().ToString().c_str(), code) != 0) {
+						::strncpy(code, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(code));
+						::strncpy(filename, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(filename));
+						::strncpy(creator, training.GetCreatorName().ToString().c_str(), IM_ARRAYSIZE(creator));
+						::strncpy(description, training.GetTM_Name().ToString().c_str(), IM_ARRAYSIZE(description));
+					}
 				}
 			}
 
 			if (ImGui::InputInt("Offensive players", &offensive_players, ImGuiInputTextFlags_CharsDecimal)) {
 				offensive_players = (offensive_players < 0) ? 0 : offensive_players;
 			}
-			if (ImGui::InputInt("Defensive players", &defensive_players, ImGuiInputTextFlags_CharsDecimal)) {
+			/*if (ImGui::InputInt("Defensive players", &defensive_players, ImGuiInputTextFlags_CharsDecimal)) {
 				defensive_players = (defensive_players < 0) ? 0 : defensive_players;
-			}
+			}*/
+			ImGui::Text("Sorry, defensive players broken right now :(");
 			if (ImGui::InputInt("Number of drills", &gui_num_drills, ImGuiInputTextFlags_CharsDecimal)) {
 				gui_num_drills = (gui_num_drills < 1) ? 1 : gui_num_drills;
 			}

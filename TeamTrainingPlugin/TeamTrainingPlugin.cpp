@@ -19,7 +19,7 @@ namespace fs = std::experimental::filesystem;
 
 #pragma comment (lib, "Ws2_32.lib")
 
-BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.2", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
+BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.2.1", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
 
 std::string vectorString(Vector v) {
 	std::stringstream ss;
@@ -74,7 +74,15 @@ void TeamTrainingPlugin::onLoad()
 	cvarManager->registerCvar(CVAR_PREFIX + "countdown", "1", "Time to wait until shot begins", true, true, 0, true, 10, true);
 
 	gameWrapper->LoadToastTexture("teamtraining1", ".\\bakkesmod\\data\\assets\\teamtraining_logo.png");
+
+	//cvarManager->registerNotifier("team_train_test", std::bind(&TeamTrainingPlugin::test, this, std::placeholders::_1), "test", PERMISSION_ALL);
 }
+
+/*void TeamTrainingPlugin::test(std::vector<std::string> params) {
+	auto training = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address).GetTrainingData();
+
+	cvarManager->log(training.GetTrainingData().GetCreatorName().ToString());
+}*/
 
 void TeamTrainingPlugin::onUnload()
 {
@@ -201,6 +209,16 @@ void TeamTrainingPlugin::setShot(int shot)
 	}
 
 	setPlayerToCar(drill.shooter, cars.Get(player_order[i++]));
+
+	if (cars.Count() > this->pack->offense) {
+		for (auto player : drill.defenders) {
+			if (player_order[i] >= cars.Count()) {
+				break;
+			}
+			CarWrapper car = cars.Get(player_order[i++]);
+			setPlayerToCar(player, car);
+		}
+	}
 	
 	float countdown = cvarManager->getCvar(CVAR_PREFIX + "countdown").getFloatValue();
 
@@ -412,6 +430,7 @@ void TeamTrainingPlugin::getNextShot()
 		custom_training_ball.location = ball.GetLocation().clone();
 		custom_training_ball.rotation = cloneRotation(ball.GetRotation());
 		gameWrapper->HookEventWithCaller<ServerWrapper>("Function GameEvent_Soccar_TA.Active.Tick", std::bind(&TeamTrainingPlugin::onBallTick, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+		cvarManager->log("toggling boost");
 		gameWrapper->GetPlayerController().ToggleBoost(1);
 	}
 	else {

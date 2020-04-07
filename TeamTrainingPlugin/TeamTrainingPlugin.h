@@ -28,6 +28,7 @@ private:
 	void randomizePlayers(std::vector<std::string> params);
 	void cyclePlayers(std::vector<std::string> params);
 	void listPacks(std::vector<std::string> params);
+	void test(std::vector<std::string> params);
 
 	// Hooks
 	void onResetShotEvent(std::string eventName);

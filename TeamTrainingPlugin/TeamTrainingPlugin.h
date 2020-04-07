@@ -65,14 +65,16 @@ private:
  */
 private:
 	bool isWindowOpen = false;
-	bool isMinimized = false;
-	bool shouldBlockInput = false;
+	bool shouldBlockInput = true;
 	std::string menuTitle = "Team Training (created by DaftPenguin)";
 	std::map<std::string, std::vector<std::string>> errorMsgs = {
 		{ "Selection", {}},
 		{ "Roles", {}},
 		{ "Creation", {}},
 	};
+	// Selection
+	std::map<std::string, TrainingPack> packs;
+	std::vector<std::string> pack_keys;
 	// Creation
 	int offensive_players = 0;
 	int defensive_players = 0;

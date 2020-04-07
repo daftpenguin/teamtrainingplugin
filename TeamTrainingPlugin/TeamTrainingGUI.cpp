@@ -15,32 +15,44 @@ int filenameFilter(ImGuiTextEditCallbackData* data) {
 void TeamTrainingPlugin::Render()
 {
 	if (!this->isWindowOpen) {
-		this->shouldBlockInput = false;
 		cvarManager->executeCommand("togglemenu " + GetMenuName());
 		return;
 	}
 
-	// TODO: Input should not be blocked if the window isn't in focus
 	// TODO: Allow users to upload packs
 
 	ImGuiWindowFlags windowFlags = 0; //| ImGuiWindowFlags_MenuBar;
 
 	ImGui::SetNextWindowSizeConstraints(ImVec2(55 + 250 + 55 + 250 + 80 + 100, 600), ImVec2(FLT_MAX, FLT_MAX));
-	ImGui::Begin(GetMenuTitle().c_str(), &this->isWindowOpen, windowFlags);
+	if (!ImGui::Begin(GetMenuTitle().c_str(), &this->isWindowOpen, windowFlags)) {
+		// Early out if the window is collapsed, as an optimization
+		this->shouldBlockInput = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
+		ImGui::End();
+		return;
+	}
 	
 	if (ImGui::BeginTabBar("Team Training", ImGuiTabBarFlags_None)) {
 		if (ImGui::BeginTabItem("Selection")) {
 			ImGui::Text("Be sure to start a multiplayer freeplay sessions via Rocket Plugin before loading a pack.");
 
-			if (errorMsgs["Creation"].size() > 0) {
+			if (errorMsgs["Selection"].size() > 0) {
 				for (auto err : errorMsgs["Selection"]) {
 					ImGui::Text(err.c_str());
 				}
 				ImGui::Separator();
 			}
 
-			auto packs = getTrainingPacks();
-			std::vector<std::string> pack_keys;
+			if (ImGui::Button("Refresh")) {
+				packs.clear();
+			}
+
+			if (packs.size() == 0) {
+				packs = getTrainingPacks();
+				pack_keys.clear();
+				for (auto pack : packs) {
+					pack_keys.push_back(pack.first);
+				}
+			}
 
 			// Left Selection
 			static int selected = 0;
@@ -48,9 +60,15 @@ void TeamTrainingPlugin::Render()
 			int i = 0;
 			for (auto pack : packs) {
 				pack_keys.push_back(pack.first);
+				if (pack.second.errorMsg != "") {
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+				}
 				if (ImGui::Selectable(pack.first.c_str(), selected == i)) {
 					selected = i;
-				}	
+				}
+				if (pack.second.errorMsg != "") {
+					ImGui::PopStyleColor();
+				}
 				if (selected == i) {
 					ImGui::SetItemDefaultFocus();
 				}
@@ -63,30 +81,45 @@ void TeamTrainingPlugin::Render()
 			std::string pack_key = pack_keys[selected];
 			TrainingPack pack = packs.at(pack_key);
 			ImGui::BeginGroup();
-			if (ImGui::Button("Load Team Training Pack")) {
-				OnClose();
-				cvarManager->executeCommand("sleep 1; team_train_load " + pack_key);
-			}
-			ImGui::BeginChild("Training Pack Details", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below us
 			
-			ImGui::Text(pack_key.c_str());
-			ImGui::Separator();
-			ImGui::Text("Creator: %s", pack.creator.c_str());
-			ImGui::Text("Description: %s", pack.description.c_str());
-			ImGui::Text("Offensive Players: %d", pack.offense);
-			ImGui::Text("Defensive Players: %d", pack.defense);
-			ImGui::Text("Drills: %d", pack.drills.size());
-			ImGui::Text("Code: %s", pack.code.c_str());
-			if (pack.code != "" && pack.code != "Unknown") {
-				ImGui::SameLine();
-				if (ImGui::Button("Open Custom Training Pack")) {
+			if (pack.errorMsg == "") {
+				if (ImGui::Button("Load Team Training Pack")) {
 					OnClose();
-					cvarManager->executeCommand("sleep 1; load_training " + pack.code);
+					cvarManager->executeCommand("sleep 1; team_train_load " + pack_key);
 				}
-			}			
-			ImGui::Text("Filepath: %s", pack.filepath.c_str());
+				if (pack.code != "") {
+					ImGui::SameLine();
+					if (ImGui::Button("Load Custom Training Pack")) {
+						OnClose();
+						cvarManager->executeCommand("sleep 1; load_training " + pack.code);
+					}
+				}
+
+				ImGui::BeginChild("Training Pack Details", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below us
+
+				ImGui::Text(pack_key.c_str());
+				ImGui::Separator();
+				ImGui::Text("Creator: %s", pack.creator.c_str());
+				ImGui::Text("Description: %s", pack.description.c_str());
+				ImGui::Text("Offensive Players: %d", pack.offense);
+				ImGui::Text("Defensive Players: %d", pack.defense);
+				ImGui::Text("Drills: %d", pack.drills.size());
+				ImGui::Text("Code: %s", pack.code.c_str());
+				ImGui::Text("Filepath: %s", pack.filepath.c_str());
+
+				ImGui::EndChild();
+			}
+			else {
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+				ImGui::Text(pack_key.c_str());
+				ImGui::Separator();
+				ImGui::TextWrapped("Failed to load pack: %s", pack.errorMsg.c_str());
+				ImGui::TextWrapped("If you converted this pack yourself, please try again.");
+				ImGui::TextWrapped("If that does not work, please report this bug to daftpenguinrl@gmail.com, @PenguinDaft on Twitter, DaftPenguin#5103 on Discord, or report issue on http://github.com/daftpenguin/teamtrainingplugin.");
+				ImGui::TextWrapped("Please include the custom training pack code with your report and the json file at the location: %s.", pack.filepath.c_str());
+				ImGui::PopStyleColor();
+			}
 			
-			ImGui::EndChild();
 			ImGui::SameLine();
 			ImGui::EndGroup();
 
@@ -150,11 +183,11 @@ void TeamTrainingPlugin::Render()
 		}
 
 		if (ImGui::BeginTabItem("Creation")) {
-			ImGui::Text("Team training packs can be generated from the single player custom training packs by separating each player's position into individual drills.");
-			ImGui::Text("Enter the number of offensive and defensive players below, and the ordering of each drill to the corresponding player position will show.");
-			ImGui::Text("Repeat this pattern for more than one drill in the team training pack.");
-			ImGui::Text("After creating the custom training pack, load it in, fill in all of the details below, then click the convert button.");
-			ImGui::Text("TURN OFF TRAINING VARIANCE BEFORE DOING CONVERSION");
+			ImGui::TextWrapped("Team training packs can be generated from the single player custom training packs by separating each player's position into individual drills.");
+			ImGui::TextWrapped("Enter the number of offensive and defensive players below, and the ordering of each drill to the corresponding player position will show.");
+			ImGui::TextWrapped("Repeat this pattern for more than one drill in the team training pack.");
+			ImGui::TextWrapped("After creating the custom training pack, load it in, fill in all of the details below, then click the convert button.");
+			ImGui::TextWrapped("TURN OFF TRAINING VARIANCE BEFORE DOING CONVERSION");
 			ImGui::Separator();
 
 			if (errorMsgs["Creation"].size() > 0) {
@@ -168,10 +201,10 @@ void TeamTrainingPlugin::Render()
 				TrainingEditorSaveDataWrapper training = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address).GetTrainingData().GetTrainingData();
 				
 				if (strcmp(training.GetCode().ToString().c_str(), code) != 0) {
-					strncpy(code, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(code));
-					strncpy(filename, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(filename));
-					strncpy(creator, training.GetCreatorName().ToString().c_str(), IM_ARRAYSIZE(creator));
-					strncpy(description, training.GetTM_Name().ToString().c_str(), IM_ARRAYSIZE(description));
+					::strncpy(code, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(code));
+					::strncpy(filename, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(filename));
+					::strncpy(creator, training.GetCreatorName().ToString().c_str(), IM_ARRAYSIZE(creator));
+					::strncpy(description, training.GetTM_Name().ToString().c_str(), IM_ARRAYSIZE(description));
 				}
 			}
 
@@ -249,8 +282,9 @@ void TeamTrainingPlugin::Render()
 		ImGui::EndTabBar();
 	}
 
-	this->shouldBlockInput = false;// ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
 	ImGui::End();
+
+	this->shouldBlockInput = ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
 }
 
 std::string TeamTrainingPlugin::GetMenuName()
@@ -270,8 +304,7 @@ void TeamTrainingPlugin::SetImGuiContext(uintptr_t ctx)
 
 bool TeamTrainingPlugin::ShouldBlockInput()
 {
-	//return this->shouldBlockInput;
-	return true;
+	return this->shouldBlockInput;
 }
 
 bool TeamTrainingPlugin::IsActiveOverlay()
@@ -285,11 +318,12 @@ void TeamTrainingPlugin::OnOpen()
 	stringstream ss;
 	ss.precision(1);
 	ss << std::fixed << cvarManager->getCvar(CVAR_PREFIX + "countdown").getFloatValue();
-	strncpy(countdown, ss.str().c_str(), IM_ARRAYSIZE(countdown));
+	::strncpy(countdown, ss.str().c_str(), IM_ARRAYSIZE(countdown));
 	this->isWindowOpen = true;
 }
 
 void TeamTrainingPlugin::OnClose()
 {
 	this->isWindowOpen = false;
+	packs.clear();
 }

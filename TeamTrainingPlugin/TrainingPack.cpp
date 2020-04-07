@@ -1,4 +1,7 @@
+// TODO: Record all ball positions/trajectories for future updates
+
 #include "TrainingPack.h"
+
 #include <fstream>
 #include <sstream>
 #include <Windows.h>
@@ -9,32 +12,54 @@ static inline bool file_exists(const std::string &filepath)
 	return !(INVALID_FILE_ATTRIBUTES == GetFileAttributes(filepath.c_str()) && GetLastError() == ERROR_FILE_NOT_FOUND);
 }
 
-TrainingPack::TrainingPack(std::string filepath, std::shared_ptr<CVarManagerWrapper> cvarManager)
+
+/* JSON Serializers */
+
+/*void to_json(json& j, const Vector& v) {
+	j = json{ {"x", v.X}, {"y", v.Y}, {"z", v.Z} };
+}
+
+void from_json(const json& j, Vector& v) {
+
+}*/
+
+
+/*TrainingPack::TrainingPack(std::string filename, int offense, int defense, std::string description, std::string creator, std::string code) :
+	filepath(".\\bakkesmod\\data\\teamtraining\\" + filename), offense(offense), defense(defense), description(description), creator(creator), code(code) {}*/
+
+TrainingPack::TrainingPack(std::string filepath) : filepath(filepath)
 {
-	this->filepath = "";
 	if (file_exists(filepath)) {
-		load(filepath, cvarManager);
+		load(filepath);
 	}
 	else {
 		filepath = ".\\bakkesmod\\data\\teamtraining\\" + filepath;
+		this->filepath = filepath;
 		if (file_exists(filepath)) {
-			load(filepath, cvarManager);
+			load(filepath);
 		}
 		else {
-			cvarManager->log("Failed to find pack at " + filepath);
-			return;
+			errorMsg = "Pack not found";
 		}
 	}
 }
 
-void TrainingPack::load(std::string filepath, std::shared_ptr<CVarManagerWrapper> cvarManager)
+void TrainingPack::load(std::string filepath)
 {
 	std::ifstream inFile;
 	inFile.open(filepath);
 
 	std::stringstream ss;
 	ss << inFile.rdbuf();
-	json js = json::parse(ss.str());
+
+	json js;
+	try {
+		js = json::parse(ss.str());
+	}
+	catch (...) {
+		errorMsg = "Error parsing json";
+		return;
+	}
 
 	if (js.find("version") == js.end()) {
 		// If no version exists, first version which only contains name, offense, and defense
@@ -55,19 +80,47 @@ void TrainingPack::load(std::string filepath, std::shared_ptr<CVarManagerWrapper
 	this->filepath = filepath;
 
 	for (json js_drill : js["drills"]) {
-		drills.push_back(parseDrill(js_drill, cvarManager));
+		drills.push_back(parseDrill(js_drill));
 	}
 }
 
-TrainingPackDrill TrainingPack::parseDrill(json js_drill, std::shared_ptr<CVarManagerWrapper> cvarManager)
+/*void TrainingPack::save() {
+	if (drills.size() == 0) {
+		errorMsg = "No drills to save";
+		return;
+	}
+
+	std::ofstream o(filepath);
+
+	json j;
+	j["version"] = 2;
+	j["description"] = description;
+	j["creator"] = creator;
+	j["code"] = code;
+	j["offense"] = offense;
+	j["defense"] = defense;
+	
+	std::vector<json> json_drills = std::vector<json>();
+	for (TrainingPackDrill drill : drills) {
+		json_drills.push_back(json{
+			{"ball", json{ {} }}
+		});
+	}
+}
+
+void TrainingPack::addDrill(TrainingPackDrill drill) {
+	drills.push_back(drill);
+}*/
+
+TrainingPackDrill TrainingPack::parseDrill(json js_drill)
 {
 	TrainingPackDrill drill;
 
-	drill.ball = parseBall(js_drill["ball"], cvarManager);
+	drill.ball = parseBall(js_drill["ball"]);
 
 	for (json js_player : js_drill["players"]) {
 		std::string role = js_player["role"].get<std::string>();
-		TrainingPackPlayer player = parsePlayer(js_player, cvarManager);
+		TrainingPackPlayer player = parsePlayer(js_player);
 		if (role.compare("passer") == 0) {
 			drill.passers.push_back(player);
 		}
@@ -100,7 +153,7 @@ Rotator parseRotator(json js_rotator)
 	);
 }
 
-TrainingPackBall TrainingPack::parseBall(json js_ball, std::shared_ptr<CVarManagerWrapper> cvarManager)
+TrainingPackBall TrainingPack::parseBall(json js_ball)
 {
 	TrainingPackBall ball;
 	ball.location = parseVector(js_ball["location"]);
@@ -110,7 +163,7 @@ TrainingPackBall TrainingPack::parseBall(json js_ball, std::shared_ptr<CVarManag
 	return ball;
 }
 
-TrainingPackPlayer TrainingPack::parsePlayer(json js_player, std::shared_ptr<CVarManagerWrapper> cvarManager)
+TrainingPackPlayer TrainingPack::parsePlayer(json js_player)
 {
 	TrainingPackPlayer player;
 	player.boost = js_player["boost"].get<float>();

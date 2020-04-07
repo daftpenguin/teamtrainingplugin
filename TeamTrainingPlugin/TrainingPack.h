@@ -32,9 +32,13 @@ struct TrainingPackDrill {
 class TrainingPack
 {
 public:
-	TrainingPack(std::string filepath, std::shared_ptr<CVarManagerWrapper> cvarManager);
-	void load(std::string filepath, std::shared_ptr<CVarManagerWrapper> cvarManager);
+	//TrainingPack(std::string filepath, int offense, int defense, std::string description, std::string creator, std::string code);
+	TrainingPack(std::string filepath);
+	void load(std::string filepath);
+	//void addDrill(TrainingPackDrill drill);
+	//void save();
 
+	std::string errorMsg = ""; // Use this to display error messages in pack selection tab
 	std::string filepath;
 	unsigned int version = 0;
 	unsigned int offense = 0;
@@ -45,8 +49,8 @@ public:
 	std::vector<TrainingPackDrill> drills;
 
 private:
-	TrainingPackDrill parseDrill(json js_drill, std::shared_ptr<CVarManagerWrapper> cvarManager);
-	TrainingPackBall parseBall(json js_ball, std::shared_ptr<CVarManagerWrapper> cvarManager);
-	TrainingPackPlayer parsePlayer(json js_player, std::shared_ptr<CVarManagerWrapper> cvarManager);
+	TrainingPackDrill parseDrill(json js_drill);
+	TrainingPackBall parseBall(json js_ball);
+	TrainingPackPlayer parsePlayer(json js_player);
 };
 

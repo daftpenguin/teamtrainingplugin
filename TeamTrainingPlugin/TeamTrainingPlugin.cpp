@@ -1,5 +1,7 @@
 // TODO: Defenders only drills, allow for consecutive or even simultaneous shots (multiple balls) to be taken on net that you have to save
-// TODO: Add targets to passes and shots, and add single player or no shooter mode to practice these drills when you don't have enough offensive players
+// TODO: Allow using packs without having enough players, and players can adjust their roles like shooter/defender, passer/shooter, passer/passer
+// TODO: Allow spectators? I'm not sure if this is currently possible or works.
+// TODO: Allow users to upload packs (require codes?)
 
 #include "TeamTrainingPlugin.h"
 
@@ -16,7 +18,7 @@ namespace fs = std::experimental::filesystem;
 
 #pragma comment (lib, "Ws2_32.lib")
 
-BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.1", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
+BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.2", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
 
 std::string vectorString(Vector v) {
 	std::stringstream ss;
@@ -69,6 +71,8 @@ void TeamTrainingPlugin::onLoad()
 	// Variables
 	cvarManager->registerCvar(CVAR_PREFIX + "randomize", "0", "Randomize the shots in a training pack", true, true, 0, true, 1, true);
 	cvarManager->registerCvar(CVAR_PREFIX + "countdown", "1", "Time to wait until shot begins", true, true, 0, true, 10, true);
+
+	gameWrapper->LoadToastTexture("teamtraining1", ".\\bakkesmod\\data\\assets\\teamtraining_logo.png");
 }
 
 void TeamTrainingPlugin::onUnload()
@@ -106,10 +110,10 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 		pack_name += ".json";
 	}
 	
-	this->pack = std::make_shared<TrainingPack>(params[1], cvarManager);
-	if (this->pack->filepath == "") {
+	this->pack = std::make_shared<TrainingPack>(params[1]);
+	if (this->pack->errorMsg != "") {
 		this->pack = NULL;
-		cvarManager->log("Given training pack is either invalid or does not exist");
+		cvarManager->log("Error opening training pack: " + this->pack->errorMsg);
 		return;
 	}
 
@@ -344,7 +348,7 @@ void TeamTrainingPlugin::internalConvert(std::vector<std::string> params) {
 	cvarManager->log("Saving data for pack: " + filename);
 	custom_training_export_file.open("bakkesmod\\data\\teamtraining\\" + filename + ".json");
 	custom_training_export_file
-		<< "{\n\"version\": 2,\n\t\"description\": \"" << description << "\",\n"
+		<< "{\n\t\"version\": 2,\n\t\"description\": \"" << description << "\",\n"
 		<< "\t\"creator\": \"" << creator << "\",\n"
 		<< "\t\"code\": \"" << code << "\",\n"
 		<< "\t\"offense\": " << offense << ",\n\t\"defense\": " << defense << ",\n\t\"drills\": [\n";
@@ -374,20 +378,6 @@ void TeamTrainingPlugin::writeShotInfo(std::vector<std::string> params)
 	defense = std::atoi(params[2].c_str());
 	num_drills = std::atoi(params[3].c_str());
 	std::string drill_name = params[4].c_str();
-
-	//TrainingEditorSaveDataWrapper training = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address).GetTrainingData().GetTrainingData();
-	//TrainingEditorWrapper t = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address);
-	/*
-	// Getting the number of rounds seems to be broken?
-	int rounds = training.GetNumRounds();
-	cvarManager->log("Rounds: " + std::to_string(rounds));
-	if (rounds % (offense + defense) != 0) {
-		cvarManager->log("Incorrect number of rounds for " + std::to_string(offense) + " offensive players and " + std::to_string(defense) + " defensive players");
-		return;
-	}
-	num_drills = rounds / (offense + defense);
-	*/
-	// drill_name = training.GetCode().ToString();
 
 	cvarManager->log("Saving data for pack: " + drill_name);
 	custom_training_export_file.open("bakkesmod\\data\\teamtraining\\" + drill_name + ".json");
@@ -423,10 +413,10 @@ void TeamTrainingPlugin::getNextShot()
 	}
 	else {
 		// Not first shot in drill, write to file if drill is complete, then move to the next shot
+		gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
 		if (custom_training_players.size() == offense + defense) {
 			writeDrillToFile();
 		}
-		gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
 		cvarManager->executeCommand("workshop_playlist_next;sv_training_next");
 	}
 }
@@ -471,6 +461,7 @@ void TeamTrainingPlugin::writeDrillToFile()
 		custom_training_export_file << "\n\t]\n}";
 		custom_training_export_file.close();
 		cvarManager->log("Finished writing drills");
+		gameWrapper->Toast("Team Training", "Team training pack conversion successfully completed.", "teamtraining1");
 	}
 }
 
@@ -497,7 +488,7 @@ std::map<std::string, TrainingPack> TeamTrainingPlugin::getTrainingPacks() {
 	for (const auto & entry : fs::directory_iterator(".\\bakkesmod\\data\\teamtraining\\")) {
 		if (entry.path().has_extension() && entry.path().extension() == ".json") {
 			//packs[entry.path().filename().string()] = TrainingPack(entry.path().string(), cvarManager);
-			packs.emplace(entry.path().filename().string(), TrainingPack(entry.path().string(), cvarManager));
+			packs.emplace(entry.path().filename().string(), TrainingPack(entry.path().string()));
 		}
 	}
 

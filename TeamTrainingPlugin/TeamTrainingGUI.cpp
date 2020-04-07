@@ -19,8 +19,6 @@ void TeamTrainingPlugin::Render()
 		return;
 	}
 
-	// TODO: Allow users to upload packs
-
 	ImGuiWindowFlags windowFlags = 0; //| ImGuiWindowFlags_MenuBar;
 
 	ImGui::SetNextWindowSizeConstraints(ImVec2(55 + 250 + 55 + 250 + 80 + 100, 600), ImVec2(FLT_MAX, FLT_MAX));

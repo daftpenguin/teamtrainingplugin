@@ -31,7 +31,7 @@ void TeamTrainingPlugin::Render()
 	
 	if (ImGui::BeginTabBar("Team Training", ImGuiTabBarFlags_None)) {
 		if (ImGui::BeginTabItem("Selection")) {
-			ImGui::Text("Be sure to start a multiplayer freeplay sessions via Rocket Plugin before loading a pack.");
+			ImGui::Text("Be sure to start a multiplayer freeplay session via Rocket Plugin before loading a pack.");
 
 			if (errorMsgs["Selection"].size() > 0) {
 				for (auto err : errorMsgs["Selection"]) {

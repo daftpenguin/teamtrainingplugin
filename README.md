@@ -48,6 +48,10 @@ Set `cl_team_training` to 1 to randomize the shots in the training pack, and `cl
 
 # Changelog
 
+v0.2.1
+* Disabled defensive players for conversion, as it is broken right now
+* Fixed crash when converting from unpublished custom training pack
+
 v0.2.0
 * Added new UI for pack selection, creation, player role assignments, and modifying cooldown and randomization settings
 * Custom training pack conversion into team training pack is fully automated now (requires no user input for ball trajectory)

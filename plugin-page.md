@@ -4,15 +4,13 @@ Now updated with UI.
 
 # Usage
 
-This plugin depends on [Rocket Plugin](https://bakkesplugins.com/plugins/view/26) for hosting a freeplay session that other players may join. Please consult their documentation on how to do this.
+This plugin depends on [Rocket Plugin](https://bakkesplugins.com/plugins/view/26) for hosting a freeplay session that other players may join.
 
-Once all players have joined the freeplay session, press F2, go to plugins, select Team Training Plugin, and click the button to launch the UI (you may also add a binding to launch `togglemenu teamtrainingplugin` to launch the UI with a key press).
+Once all players have joined the freeplay session, press F2, go to plugins, select Team Training Plugin, and click the button to launch the UI.
 
 The new UI contains tabs for selecting training packs, assigning player roles, converting a custom training pack into a team training pack, and modifying the plugin's settings.
 
 If you have converted any training packs other than the ones provided, some changes were made to the format of the custom training packs and it is recommended that you run the conversion on it again to update it. The custom training pack code will now be saved with the pack so that this may be automated in the future.
-
-All the previous console commands still exist, but they are deprecated and may behave differently or not even work. Visit the plugin's homepage for more information about the console commands.
 
 The plugin comes packaged with three packs: left, right, and infield. These packs were generated from Wayprotein's passing packs: C833-6A35-A46A-7191, 0590-9035-801A-E423, CDBB-8953-C052-654F. Note the shooter positions are a little awkward as they are positioned after the pass is in progress.
 
@@ -27,6 +25,10 @@ Once you have prepared your custom training pack, open the Team Training plugin'
 Defense only training packs do not work right now. These may or may not be supported in a future update as I'm unsure about how these should be implemented.
 
 # Changelog
+
+v0.2.1
+* Disabled defensive players for conversion, as it is broken right now
+* Fixed crash when converting from unpublished custom training pack
 
 v0.2.0
 * Added new UI for pack selection, creation, player role assignments, and modifying cooldown and randomization settings

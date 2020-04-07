@@ -29,6 +29,7 @@ void from_json(const json& j, Vector& v) {
 
 TrainingPack::TrainingPack(std::string filepath) : filepath(filepath)
 {
+	load_time = std::chrono::system_clock::now();
 	if (file_exists(filepath)) {
 		load(filepath);
 	}
@@ -82,6 +83,8 @@ void TrainingPack::load(std::string filepath)
 	for (json js_drill : js["drills"]) {
 		drills.push_back(parseDrill(js_drill));
 	}
+
+	inFile.close();
 }
 
 /*void TrainingPack::save() {

@@ -82,13 +82,11 @@ void TeamTrainingPlugin::Render()
 			
 			if (pack.errorMsg == "") {
 				if (ImGui::Button("Load Team Training Pack")) {
-					OnClose();
 					cvarManager->executeCommand("sleep 1; team_train_load " + pack_key);
 				}
 				if (pack.code != "") {
 					ImGui::SameLine();
 					if (ImGui::Button("Load Custom Training Pack")) {
-						OnClose();
 						cvarManager->executeCommand("sleep 1; load_training " + pack.code);
 					}
 				}

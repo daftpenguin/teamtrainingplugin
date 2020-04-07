@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <random>
 #include <experimental\filesystem>
+#include <chrono>
 
 namespace fs = std::experimental::filesystem;
 
@@ -109,7 +110,7 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 	if (pack_name.size() < 5 || pack_name.substr(pack_name.size() - 5).compare(".json") != 0) {
 		pack_name += ".json";
 	}
-	
+
 	this->pack = std::make_shared<TrainingPack>(params[1]);
 	if (this->pack->errorMsg != "") {
 		this->pack = NULL;
@@ -128,9 +129,11 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 	}
 
 	ArrayWrapper<CarWrapper> cars = tutorial.GetCars();
-	player_order.clear();
-	for (int i = 0; i < cars.Count(); i++) {
-		player_order.push_back(i);
+	if (player_order.size() < cars.Count()) {
+		player_order.clear();
+		for (int i = 0; i < cars.Count(); i++) {
+			player_order.push_back(i);
+		}
 	}
 
 	setShot(0);
@@ -200,19 +203,19 @@ void TeamTrainingPlugin::setShot(int shot)
 	setPlayerToCar(drill.shooter, cars.Get(player_order[i++]));
 	
 	float countdown = cvarManager->getCvar(CVAR_PREFIX + "countdown").getFloatValue();
-	gameWrapper->SetTimeout([&, &_cvarManager = cvarManager, shot_set](GameWrapper *gw) {
+
+	auto pack_load_time = this->pack->load_time;
+	gameWrapper->SetTimeout([&, &_cvarManager = cvarManager, shot_set, pack_load_time](GameWrapper *gw) {
 		if (!gameWrapper->IsInFreeplay()) {
 			return;
 		}
 
-		// Don't do anything if a new shot was set before timeout is called
-		if (last_shot_set != shot_set) {
+		// Don't do anything if a new shot was set or pack was replaced before timeout is called
+		if (last_shot_set != shot_set || pack_load_time != pack->load_time) {
 			return;
 		}
 
 		ServerWrapper sw = gw->GetGameEventAsServer();
-		ArrayWrapper<CarWrapper> cars = sw.GetCars();
-
 		BallWrapper ball = sw.GetBall();
 		TrainingPackDrill drill = pack->drills[current_shot];
 		ball.SetRotation(drill.ball.rotation);

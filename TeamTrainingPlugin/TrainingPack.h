@@ -5,6 +5,7 @@
 #include "nlohmann/json.hpp"
 #include <string>
 #include <vector>
+#include <chrono>
 
 using json = nlohmann::json;
 
@@ -39,6 +40,7 @@ public:
 	//void save();
 
 	std::string errorMsg = ""; // Use this to display error messages in pack selection tab
+	std::chrono::system_clock::time_point load_time;
 	std::string filepath;
 	unsigned int version = 0;
 	unsigned int offense = 0;

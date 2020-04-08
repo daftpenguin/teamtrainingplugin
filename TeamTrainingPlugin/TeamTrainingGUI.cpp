@@ -135,6 +135,7 @@ void TeamTrainingPlugin::Render()
 			if (!this->pack) {
 				ImGui::Text("No pack loaded");
 			} else {
+				ImGui::Text("Drag a player's name onto another player's name to swap their roles");
 				ImGui::Text("Player role assignments are based on their order as they are \"seen\" by the server.");
 				ImGui::Text("Different events may change their ordering, like players getting demolished or disconnecting then reconnecting to the server.");
 				ImGui::Text("I may or may not fix this in a future update.");

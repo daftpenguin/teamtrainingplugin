@@ -19,7 +19,7 @@ namespace fs = std::experimental::filesystem;
 
 #pragma comment (lib, "Ws2_32.lib")
 
-BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.2.1", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
+BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.2.2", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
 
 std::string vectorString(Vector v) {
 	std::stringstream ss;
@@ -426,7 +426,6 @@ void TeamTrainingPlugin::getNextShot()
 	TrainingPackPlayer p = TrainingPackPlayer{ 33.0f, car.GetLocation().clone(), Vector(0), cloneRotation(car.GetRotation()) };
 
 	// Push to front if offensive player (since they're in reverse order)
-	cvarManager->log("Adding player");
 	if (custom_training_players.size() < offense) {
 		custom_training_players.insert(custom_training_players.begin(), p);
 	} else {
@@ -444,7 +443,6 @@ void TeamTrainingPlugin::getNextShot()
 	} else {
 		// Write to file if drill is complete, or move to the next shot
 		if (custom_training_players.size() == offense + defense) {
-			cvarManager->log("Writing to file");
 			writeDrillToFile();
 		}
 		else {
@@ -516,7 +514,6 @@ void TeamTrainingPlugin::onBallTick(std::string eventName)
 		if (defense == 0) {
 			writeDrillToFile();
 		} else {
-			cvarManager->log("Rehooking round reset for defense");
 			gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
 			cvarManager->executeCommand("sv_training_next");
 		}

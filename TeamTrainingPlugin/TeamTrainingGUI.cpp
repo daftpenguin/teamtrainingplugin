@@ -219,10 +219,9 @@ void TeamTrainingPlugin::Render()
 			if (ImGui::InputInt("Offensive players", &offensive_players, ImGuiInputTextFlags_CharsDecimal)) {
 				offensive_players = (offensive_players < 0) ? 0 : offensive_players;
 			}
-			/*if (ImGui::InputInt("Defensive players", &defensive_players, ImGuiInputTextFlags_CharsDecimal)) {
+			if (ImGui::InputInt("Defensive players", &defensive_players, ImGuiInputTextFlags_CharsDecimal)) {
 				defensive_players = (defensive_players < 0) ? 0 : defensive_players;
-			}*/
-			ImGui::Text("Sorry, defensive players broken right now :(");
+			}
 			if (ImGui::InputInt("Number of drills", &gui_num_drills, ImGuiInputTextFlags_CharsDecimal)) {
 				gui_num_drills = (gui_num_drills < 1) ? 1 : gui_num_drills;
 			}
@@ -236,6 +235,8 @@ void TeamTrainingPlugin::Render()
 				errorMsgs["Creation"].clear();
 				if (offensive_players + defensive_players == 0) {
 					errorMsgs["Creation"].push_back("Must have at least one player.");
+				} else if (offensive_players == 0) {
+					errorMsgs["Creation"].push_back("Must have at least on offensive player. Defense only packs are not supported at this time.");
 				}
 				if (filename[0] == '\0') {
 					errorMsgs["Creation"].push_back("Must specify a filename.");
@@ -246,10 +247,12 @@ void TeamTrainingPlugin::Render()
 					std::string creatorEscaped(creator);
 					std::string descriptionEscaped(description);
 					boost::replace_all(descriptionEscaped, "\"", "\\\"");
+					boost::replace_all(descriptionEscaped, "'", "\\'");
 					boost::replace_all(creatorEscaped, "\"", "\\\"");
+					boost::replace_all(creatorEscaped, "'", "\\'");
 					std::stringstream cmd_ss;
 					cmd_ss << "sleep 1; team_train_internal_convert " << offensive_players << " " << defensive_players << " " << gui_num_drills
-						<< " \"" << filename << "\" \"" << creator << "\" \"" << description << "\" \"" << code << "\"";
+						<< " \"" << filename << "\" \"" << creatorEscaped << "\" \"" << descriptionEscaped << "\" \"" << code << "\"";
 					std::string cmd = cmd_ss.str();
 					OnClose();
 					cvarManager->executeCommand(cmd);

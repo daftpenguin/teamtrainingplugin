@@ -50,7 +50,7 @@ private:
 	void writeShotInfo(std::vector<std::string> params);
 	void internalConvert(std::vector<std::string> params);
 	void onNextRound(std::string eventName);
-	void onBallTick(ServerWrapper server, void * params, std::string eventName);
+	void onBallTick(std::string eventName);
 	void writeDrillToFile();
 	void getNextShot();
 	ofstream custom_training_export_file;
@@ -59,6 +59,7 @@ private:
 	int num_drills;
 	int drills_written = 0;
 	TrainingPackBall custom_training_ball;
+	bool custom_training_ball_velocity_set = false;
 	std::vector<TrainingPackPlayer> custom_training_players;
 
 /*

@@ -400,6 +400,14 @@ void TeamTrainingPlugin::writeShotInfo(std::vector<std::string> params)
 	num_drills = std::atoi(params[3].c_str());
 	std::string drill_name = params[4].c_str();
 
+	if (offense + defense == 0) {
+		cvarManager->log("Must have at least one offensive or defensive player");
+		return;
+	} else if (offense == 0) {
+		cvarManager->log("Must have at least one offensive player");
+		return;
+	}
+
 	cvarManager->log("Saving data for pack: " + drill_name);
 	custom_training_export_file.open("bakkesmod\\data\\teamtraining\\" + drill_name + ".json");
 	std::string creator("Unknown");
@@ -413,14 +421,15 @@ void TeamTrainingPlugin::writeShotInfo(std::vector<std::string> params)
 void TeamTrainingPlugin::getNextShot()
 {
 	ServerWrapper server = gameWrapper->GetGameEventAsServer();
-
 	ArrayWrapper<CarWrapper> cars = server.GetCars();
 	CarWrapper car = cars.Get(0);
 	TrainingPackPlayer p = TrainingPackPlayer{ 33.0f, car.GetLocation().clone(), Vector(0), cloneRotation(car.GetRotation()) };
-	if (custom_training_players.size() < offense) { // Push to front first for passers
+
+	// Push to front if offensive player (since they're in reverse order)
+	cvarManager->log("Adding player");
+	if (custom_training_players.size() < offense) {
 		custom_training_players.insert(custom_training_players.begin(), p);
-	}
-	else {
+	} else {
 		custom_training_players.push_back(p);
 	}
 
@@ -429,22 +438,25 @@ void TeamTrainingPlugin::getNextShot()
 		BallWrapper ball = server.GetBall();
 		custom_training_ball.location = ball.GetLocation().clone();
 		custom_training_ball.rotation = cloneRotation(ball.GetRotation());
-		gameWrapper->HookEventWithCaller<ServerWrapper>("Function GameEvent_Soccar_TA.Active.Tick", std::bind(&TeamTrainingPlugin::onBallTick, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-		cvarManager->log("toggling boost");
+		custom_training_ball_velocity_set = false;
+		gameWrapper->HookEventPost("Function GameEvent_Soccar_TA.Active.Tick", std::bind(&TeamTrainingPlugin::onBallTick, this, std::placeholders::_1));
 		gameWrapper->GetPlayerController().ToggleBoost(1);
-	}
-	else {
-		// Not first shot in drill, write to file if drill is complete, then move to the next shot
-		gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
+	} else {
+		// Write to file if drill is complete, or move to the next shot
 		if (custom_training_players.size() == offense + defense) {
+			cvarManager->log("Writing to file");
 			writeDrillToFile();
 		}
-		cvarManager->executeCommand("workshop_playlist_next;sv_training_next");
+		else {
+			gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
+			cvarManager->executeCommand("sv_training_next");
+		}
 	}
 }
 
 void TeamTrainingPlugin::onNextRound(std::string eventName)
 {
+	gameWrapper->UnhookEvent("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm");
 	getNextShot();
 }
 
@@ -475,11 +487,13 @@ void TeamTrainingPlugin::writeDrillToFile()
 	custom_training_players.clear();
 	if (++drills_written < num_drills) {
 		custom_training_export_file << ",\n";
+		gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
 		gameWrapper->SetTimeout([&, &_cvarManager = cvarManager](GameWrapper *gw) {
-			cvarManager->executeCommand("workshop_playlist_next;sv_training_next");
+			cvarManager->executeCommand("sv_training_next");
 		}, 1.0f);
 	}
 	else {
+		gameWrapper->UnhookEvent("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm");
 		custom_training_export_file << "\n\t]\n}";
 		custom_training_export_file.close();
 		cvarManager->log("Finished writing drills");
@@ -487,19 +501,24 @@ void TeamTrainingPlugin::writeDrillToFile()
 	}
 }
 
-void TeamTrainingPlugin::onBallTick(ServerWrapper server, void * params, std::string eventName)
+void TeamTrainingPlugin::onBallTick(std::string eventName)
 {
-	BallWrapper ball = server.GetBall();
+	if (custom_training_ball_velocity_set) { // I don't think this needs a mutex
+		return;
+	}
+	BallWrapper ball = gameWrapper->GetGameEventAsServer().GetBall();
 	Vector v = ball.GetVelocity();
 	if (v.X != 0 || v.Y != 0 || v.Z != 0) {
+		custom_training_ball_velocity_set = true;
 		gameWrapper->UnhookEvent("Function GameEvent_Soccar_TA.Active.Tick");
 		gameWrapper->GetPlayerController().ToggleBoost(0);
 		custom_training_ball.velocity = ball.GetVelocity().clone();
 		if (defense == 0) {
 			writeDrillToFile();
-		}
-		else {
-			cvarManager->executeCommand("workshop_playlist_next;sv_training_next");
+		} else {
+			cvarManager->log("Rehooking round reset for defense");
+			gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
+			cvarManager->executeCommand("sv_training_next");
 		}
 	}
 }

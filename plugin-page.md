@@ -1,33 +1,31 @@
 A Bakkesmod plugin for multiplayer custom training drills.
 
-Now updated with UI.
-
 # Usage
 
-This plugin depends on [Rocket Plugin](https://bakkesplugins.com/plugins/view/26) for hosting a freeplay session that other players may join.
+For multiplayer training with non-local players, you can use [Rocket Plugin](https://bakkesplugins.com/plugins/view/26) for hosting a freeplay session that others may join.
 
 Once all players have joined the freeplay session, press F2, go to plugins, select Team Training Plugin, and click the button to launch the UI.
 
 The new UI contains tabs for selecting training packs, assigning player roles, converting a custom training pack into a team training pack, and modifying the plugin's settings.
 
-If you have converted any training packs other than the ones provided, some changes were made to the format of the custom training packs and it is recommended that you run the conversion on it again to update it. The custom training pack code will now be saved with the pack so that this may be automated in the future.
-
 The plugin comes packaged with three packs: left, right, and infield. These packs were generated from Wayprotein's passing packs: C833-6A35-A46A-7191, 0590-9035-801A-E423, CDBB-8953-C052-654F. Note the shooter positions are a little awkward as they are positioned after the pass is in progress.
 
 # Creating Team Training Packs
 
-Team training packs can be created using regular custom training packs. The way this works is by setting each player's position in separate drills within the custom training pack, and then the ball's state is taken from the first passer.
+Team training packs can be created using regular custom training packs. The way this works is by setting each player's position in separate drills within the custom training pack, and the starting ball's state is taken from the first passer.
 
 Opening the UI, clicking on the Creation tab, and filling in the number of offensive and defensive players will show the drill order at the bottom. For example, set offensive players to 3 and defensive players to 1. The drill order will show as shooter, followed by 2 passer drills, and end with 1 defender drill. This means that the first drill should be the shooter's position, the second drill will be the second passer position (passes to shooter from first passer's pass), the third drill will be the first passer position AND the ball's starting position and trajectory in the team training drill, and the fourth drill will be the defender's position. Therefore, these 4 drills will make up one team training drill. Repeat this pattern in the same custom training pack to have more than one team training drill.
 
-Once you have prepared your custom training pack, open the Team Training plugin's UI, make sure the details are correct, and press the convert button. The plugin should close the UI, automatically skip through all the drills and retrieve the data necessary for the team training pack (don't press anything while this is happening). Once it's done recording the data, it will stop skipping through the drills and a toast notification will display saying it's completed (if you have toast notifications enabled). If you bring up the plugin's UI, your pack should now show in the pack selection tab.
+Once you have prepared your custom training pack, open the custom training pack to the first drill, open the Team Training plugin's UI, fill in the correct details, and press the convert button. The plugin should close the UI and automatically skip through the drills while retrieving the data necessary for the team training pack (don't press anything while this is happening). Once it's done recording the data, it will stop skipping through the drills and a toast notification will display saying it's completed (if you have toast notifications enabled). If you bring up the plugin's UI, your pack should now show in the pack selection tab.
 
-Defense only training packs do not work right now. These may or may not be supported in a future update as I'm unsure about how these should be implemented.
+Defense only training packs do not work right now. These may or may not be supported in a future update.
 
 # Changelog
 
 v0.2.3
 * Added some checks to prevent crashes due to misuse
+* Fixed drill randomization
+* Scoring now advances to the next drill, using shot reset button resets the drill
 
 v0.2.2
 * Added/fixed defenders in packs for loading and creating packs

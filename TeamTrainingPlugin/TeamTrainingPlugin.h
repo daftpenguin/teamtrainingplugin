@@ -31,6 +31,7 @@ private:
 	void test(std::vector<std::string> params);
 
 	// Hooks
+	void onGoalScored(std::string eventName);
 	void onResetShotEvent(std::string eventName);
 	void onFreeplayDestroyed(std::string eventName);
 
@@ -45,6 +46,7 @@ private:
 	std::shared_ptr<TrainingPack> pack;
 	unsigned int current_shot = 0;
 	unsigned int last_shot_set = 0;
+	bool goal_was_scored = false;
 
 	// Properties for printing custom training
 	void writeShotInfo(std::vector<std::string> params);
@@ -53,6 +55,7 @@ private:
 	void onBallTick(std::string eventName);
 	void writeDrillToFile();
 	void getNextShot();
+
 	ofstream custom_training_export_file;
 	int offense;
 	int defense;

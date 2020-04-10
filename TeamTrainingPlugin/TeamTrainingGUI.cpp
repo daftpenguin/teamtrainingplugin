@@ -31,13 +31,15 @@ void TeamTrainingPlugin::Render()
 	
 	if (ImGui::BeginTabBar("Team Training", ImGuiTabBarFlags_None)) {
 		if (ImGui::BeginTabItem("Selection")) {
-			ImGui::Text("Be sure to start a multiplayer freeplay session via Rocket Plugin before loading a pack.");
+			ImGui::TextWrapped("Be sure to start a multiplayer freeplay session via Rocket Plugin before loading a pack.");
 
 			if (errorMsgs["Selection"].size() > 0) {
 				ImGui::Separator();
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
 				for (auto err : errorMsgs["Selection"]) {
-					ImGui::TextColored(ImVec4(255, 0, 0, 255), err.c_str());
+					ImGui::TextWrapped(err.c_str());
 				}
+				ImGui::PopStyleColor();
 				ImGui::Separator();
 			}
 
@@ -84,11 +86,18 @@ void TeamTrainingPlugin::Render()
 			if (pack.errorMsg == "") {
 				if (ImGui::Button("Load Team Training Pack")) {
 					errorMsgs["Selection"].clear();
-					auto cars = gameWrapper->GetGameEventAsServer().GetCars();
-					if (cars.Count() < pack.offense) {
-						errorMsgs["Selection"].push_back("Pack requires " + std::to_string(pack.offense) + " players but there are only " + std::to_string(cars.Count()) + " in the lobby.");
-					} else {
-						errorMsgs["Selection"].clear();
+
+					if (!gameWrapper->IsInFreeplay()) {
+						errorMsgs["Selection"].push_back("You must be in a freeplay session to load a training pack. Use Rocket plugin to launch a multiplayer freeplay session with non-local players.");
+					}
+					else {
+						auto cars = gameWrapper->GetGameEventAsServer().GetCars();
+						if (cars.Count() < pack.offense) {
+							errorMsgs["Selection"].push_back("Pack requires " + std::to_string(pack.offense) + " players but there are only " + std::to_string(cars.Count()) + " in the lobby.");
+						}
+					}
+
+					if (errorMsgs["Selection"].size() == 0) {
 						cvarManager->executeCommand("sleep 1; team_train_load " + pack_key);
 					}
 
@@ -134,16 +143,20 @@ void TeamTrainingPlugin::Render()
 		if (ImGui::BeginTabItem("Player Roles")) {
 			if (!this->pack) {
 				ImGui::Text("No pack loaded");
+			} else if (!gameWrapper->IsInFreeplay()) {
+				ImGui::Text("Not in freeplay");
 			} else {
-				ImGui::Text("Drag a player's name onto another player's name to swap their roles");
-				ImGui::Text("Player role assignments are based on their order as they are \"seen\" by the server.");
-				ImGui::Text("Different events may change their ordering, like players getting demolished or disconnecting then reconnecting to the server.");
-				ImGui::Text("I may or may not fix this in a future update.");
+				ImGui::TextWrapped("Drag a player's name onto another player's name to swap their roles.");
+				ImGui::TextWrapped("Player role assignments are based on their order as they are \"seen\" by the server.");
+				ImGui::TextWrapped("Different events may change their ordering, like players getting demolished or disconnecting then reconnecting to the server.");
+				ImGui::TextWrapped("I may or may not fix this in a future update.");
 
 				if (errorMsgs["Roles"].size() > 0) {
-					for (auto err : errorMsgs["Creation"]) {
-						ImGui::Text(err.c_str());
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+					for (auto err : errorMsgs["Roles"]) {
+						ImGui::TextWrapped(err.c_str());
 					}
+					ImGui::PopStyleColor();
 					ImGui::Separator();
 				}
 
@@ -197,9 +210,11 @@ void TeamTrainingPlugin::Render()
 			ImGui::Separator();
 
 			if (errorMsgs["Creation"].size() > 0) {
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
 				for (auto err : errorMsgs["Creation"]) {
-					ImGui::TextColored(ImVec4(255, 0, 0, 255), err.c_str());
+					ImGui::TextWrapped(err.c_str());
 				}
+				ImGui::PopStyleColor();
 				ImGui::Separator();
 			}
 
@@ -234,6 +249,9 @@ void TeamTrainingPlugin::Render()
 
 			if (ImGui::Button("Convert")) {
 				errorMsgs["Creation"].clear();
+				if (!gameWrapper->IsInCustomTraining()) {
+					errorMsgs["Creation"].push_back("Must be in custom training to do conversion.");
+				}
 				if (offensive_players + defensive_players == 0) {
 					errorMsgs["Creation"].push_back("Must have at least one player.");
 				} else if (offensive_players == 0) {

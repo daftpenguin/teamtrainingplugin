@@ -2,6 +2,7 @@
 // TODO: Allow using packs without having enough players, and players can adjust their roles like shooter/defender, passer/shooter, passer/passer
 // TODO: Allow spectators? I'm not sure if this is currently possible or works.
 // TODO: Allow users to upload packs (require codes?)
+// TODO: Why are cvars not being saved to config?
 
 #include "TeamTrainingPlugin.h"
 
@@ -19,7 +20,7 @@ namespace fs = std::experimental::filesystem;
 
 #pragma comment (lib, "Ws2_32.lib")
 
-BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.2.2", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
+BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.2.3", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
 
 std::string vectorString(Vector v) {
 	std::stringstream ss;
@@ -105,7 +106,8 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 		// First time loading, set bindings
 		cvarManager->backupBinds("bakkesmod\\cfg\\team_training_bindings_backup.cfg");
 		cvarManager->loadCfg("team_training.cfg");
-		//gameWrapper->HookEventPost("Function TAGame.GameEvent_Soccar_TA.ResetPlayers", std::bind(&TeamTrainingPlugin::onResetShotEvent, this, std::placeholders::_1));
+		gameWrapper->HookEventPost("Function GameEvent_Soccar_TA.PostGoalScored.BeginState", std::bind(&TeamTrainingPlugin::onGoalScored, this, std::placeholders::_1));
+		gameWrapper->HookEventPost("Function TAGame.GameEvent_TA.StartEvent", std::bind(&TeamTrainingPlugin::onResetShotEvent, this, std::placeholders::_1));
 		gameWrapper->HookEventPost("Function TAGame.GameEvent_Soccar_TA.Destroyed", std::bind(&TeamTrainingPlugin::onFreeplayDestroyed, this, std::placeholders::_1));
 	}
 
@@ -128,8 +130,7 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 
 	cvarManager->log("Loaded training pack: " + this->pack->filepath);
 	if (cvarManager->getCvar(CVAR_PREFIX + "randomize").getBoolValue()) {
-		auto rng = std::default_random_engine{};
-		std::shuffle(std::begin(pack->drills), std::end(pack->drills), rng);
+		std::random_shuffle(pack->drills.begin(), pack->drills.end());
 	}
 
 	if (!validatePlayers(tutorial)) {
@@ -169,6 +170,7 @@ void TeamTrainingPlugin::setShot(int shot)
 
 	unsigned int shot_set = last_shot_set + 1;
 	last_shot_set = shot_set;
+	goal_was_scored = false;
 
 	if (!validatePlayers(tutorial)) {
 		return;
@@ -275,9 +277,20 @@ void TeamTrainingPlugin::listPacks(std::vector<std::string> params)
 	}
 }
 
+void TeamTrainingPlugin::onGoalScored(std::string eventName)
+{
+	goal_was_scored = true;
+}
+
 void TeamTrainingPlugin::onResetShotEvent(std::string eventName)
 {
-	resetShot();
+	if (!gameWrapper->GetGameEventAsServer().IsNull()) {
+		if (goal_was_scored) {
+			onNextShot({});
+		} else {
+			resetShot();
+		}
+	}
 }
 
 void TeamTrainingPlugin::onResetShot(std::vector<std::string> params)

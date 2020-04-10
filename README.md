@@ -48,6 +48,11 @@ Set `cl_team_training` to 1 to randomize the shots in the training pack, and `cl
 
 # Changelog
 
+v0.2.2
+* Added/fixed defenders in packs for loading and creating packs
+* Fixed crash when pack's description or creator contains an apostrophe
+* Block creation of packs with no offensive players
+
 v0.2.1
 * Disabled defensive players for conversion, as it is broken right now
 * Fixed crash when converting from unpublished custom training pack

@@ -3,6 +3,13 @@
 // TODO: Allow spectators? I'm not sure if this is currently possible or works.
 // TODO: Allow users to upload packs (require codes?)
 // TODO: Why are cvars not being saved to config?
+// TODO: Add HUD?
+// TODO: Shot variance
+// TODO: Generate shots from replays into packs
+// TODO: SpectatorShortcut for a consistent ordering of players? Or just used player IDs?
+// TODO: Add randomize and cycle buttons role assignments in UI
+// TODO: Do bindings better
+// TODO: Changing variance with starting buttons resets bindings...
 
 #include "TeamTrainingPlugin.h"
 
@@ -20,7 +27,7 @@ namespace fs = std::experimental::filesystem;
 
 #pragma comment (lib, "Ws2_32.lib")
 
-BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.2.3", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
+BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.2.4", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING )
 
 std::string vectorString(Vector v) {
 	std::stringstream ss;
@@ -80,15 +87,12 @@ void TeamTrainingPlugin::onLoad()
 }
 
 /*void TeamTrainingPlugin::test(std::vector<std::string> params) {
-	auto training = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address).GetTrainingData();
-
-	cvarManager->log(training.GetTrainingData().GetCreatorName().ToString());
 }*/
 
 void TeamTrainingPlugin::onUnload()
 {
 	if (!pack) {
-		cvarManager->loadCfg("team_training_bindings_backup.cfg");
+		cvarManager->loadCfg("default_training.cfg");
 		pack = NULL;
 	}
 }
@@ -102,15 +106,6 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 	}
 	ServerWrapper tutorial = gameWrapper->GetGameEventAsServer();
 
-	if (!pack) {
-		// First time loading, set bindings
-		cvarManager->backupBinds("bakkesmod\\cfg\\team_training_bindings_backup.cfg");
-		cvarManager->loadCfg("team_training.cfg");
-		gameWrapper->HookEventPost("Function GameEvent_Soccar_TA.PostGoalScored.BeginState", std::bind(&TeamTrainingPlugin::onGoalScored, this, std::placeholders::_1));
-		gameWrapper->HookEventPost("Function TAGame.GameEvent_TA.StartEvent", std::bind(&TeamTrainingPlugin::onResetShotEvent, this, std::placeholders::_1));
-		gameWrapper->HookEventPost("Function TAGame.GameEvent_Soccar_TA.Destroyed", std::bind(&TeamTrainingPlugin::onFreeplayDestroyed, this, std::placeholders::_1));
-	}
-
 	if (params.size() < 2) {
 		cvarManager->log("Must provide the name of an existing training pack");
 		return;
@@ -121,11 +116,19 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 		pack_name += ".json";
 	}
 
+	bool firstPack = pack == NULL;
 	this->pack = std::make_shared<TrainingPack>(params[1]);
 	if (this->pack->errorMsg != "") {
 		this->pack = NULL;
 		cvarManager->log("Error opening training pack: " + this->pack->errorMsg);
 		return;
+	}
+
+	if (firstPack) {
+		cvarManager->loadCfg("team_training.cfg");
+		gameWrapper->HookEventPost("Function GameEvent_Soccar_TA.PostGoalScored.BeginState", std::bind(&TeamTrainingPlugin::onGoalScored, this, std::placeholders::_1));
+		gameWrapper->HookEventPost("Function TAGame.GameEvent_TA.StartEvent", std::bind(&TeamTrainingPlugin::onResetShotEvent, this, std::placeholders::_1));
+		gameWrapper->HookEventPost("Function TAGame.GameEvent_Soccar_TA.Destroyed", std::bind(&TeamTrainingPlugin::onFreeplayDestroyed, this, std::placeholders::_1));
 	}
 
 	cvarManager->log("Loaded training pack: " + this->pack->filepath);
@@ -150,7 +153,7 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 
 void TeamTrainingPlugin::onFreeplayDestroyed(std::string eventName)
 {
-	cvarManager->loadCfg("team_training_bindings_backup.cfg");
+	cvarManager->loadCfg("default_training.cfg");
 	pack = NULL;
 }
 
@@ -238,9 +241,49 @@ void TeamTrainingPlugin::setShot(int shot)
 		ServerWrapper sw = gw->GetGameEventAsServer();
 		BallWrapper ball = sw.GetBall();
 		TrainingPackDrill drill = pack->drills[current_shot];
-		ball.SetRotation(drill.ball.rotation);
-		ball.SetVelocity(drill.ball.velocity);
+
+		Rotator rotation = drill.ball.rotation;
+		Vector velocity = drill.ball.velocity;
+
+		/*cvarManager->log("variance enabled? " + to_string(cvarManager->getCvar("sv_training_enabled").getBoolValue()));
+		if (cvarManager->getCvar("sv_training_enabled").getBoolValue()) {
+
+			// Rotation is (0, 0, 0) in many of the packs I've used...
+			float rotation_var = (cvarManager->getCvar("sv_training_var_rot").getFloatValue() / 100);
+			rotation.Pitch *= (1 + rotation_var);
+			rotation.Yaw   *= (1 + rotation_var);
+			rotation.Roll  *= (1 + rotation_var);
+
+			float magnitude = velocity.magnitude();
+			velocity.normalize();
+			velocity = velocity * (magnitude * (1 + cvarManager->getCvar("sv_training_var_speed").getFloatValue() / 100));
+		}*/
+
+		ball.SetRotation(rotation);
+		ball.SetVelocity(velocity);
 	}, max(0.0f, countdown));
+}
+
+Vector TeamTrainingPlugin::addBallVariance(Vector location)
+{
+	/*
+sv_training_allowmirror "1" //Mirrors custom training shots randomly
+sv_training_autoshuffle "1" //Automatically shuffles playlists
+sv_training_enabled "1" //Enable custom training variance
+sv_training_limitboost "-1" //Limits the boost you can use in custom training (-1 for unlimited)
+sv_training_var_car_loc "0" //Randomly changes the car location by this amount (in unreal units)
+sv_training_var_car_rot "0" //Randomly changes the car rotation by this amount (in %)
+sv_training_var_loc "(-250.000000, 250.000000)" //Randomly changes the location by this amount (in unreal units)
+sv_training_var_loc_z "(-30.000000, 200.000000)" //Randomly changes the location by this amount (in unreal units)
+sv_training_var_rot "(-5.000000, 5.000000)" //Randomly changes the rotation by this amount (in %)
+sv_training_var_speed "(-7.000000, 7.000000)" //Randomly changes the velocity by this amount (in %)
+sv_training_var_spin "(-6, 6)" //Spin to add to the ball (in unreal units)
+	*/
+
+	if (cvarManager->getCvar("sv_training_enabled").getBoolValue()) {
+		
+	}
+	return location;
 }
 
 void TeamTrainingPlugin::randomizePlayers(std::vector<std::string> params)
@@ -300,7 +343,7 @@ void TeamTrainingPlugin::onResetShot(std::vector<std::string> params)
 
 void TeamTrainingPlugin::resetShot()
 {
-	if (!gameWrapper->IsInFreeplay()) {
+	if (!gameWrapper->IsInFreeplay() || !pack) {
 		return;
 	}
 
@@ -309,8 +352,7 @@ void TeamTrainingPlugin::resetShot()
 
 void TeamTrainingPlugin::onNextShot(std::vector<std::string> params)
 {
-	if (!pack) {
-		cvarManager->log("No pack loaded");
+	if (!gameWrapper->IsInFreeplay() || !pack) {
 		return;
 	}
 
@@ -324,8 +366,7 @@ void TeamTrainingPlugin::onNextShot(std::vector<std::string> params)
 
 void TeamTrainingPlugin::onPrevShot(std::vector<std::string> params)
 {
-	if (!pack) {
-		cvarManager->log("No pack loaded");
+	if (!gameWrapper->IsInFreeplay() || !pack) {
 		return;
 	}
 

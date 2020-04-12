@@ -4,7 +4,7 @@ A Bakkesmod plugin for multiplayer custom training drills.
 
 For multiplayer training with non-local players, you can use [Rocket Plugin](https://bakkesplugins.com/plugins/view/26) for hosting a freeplay session that others may join.
 
-Once all players have joined the freeplay session, press F2, go to plugins, select Team Training Plugin, and click the button to launch the UI (you may also add a binding to launch `togglemenu teamtrainingplugin` to launch the UI with a key press).
+Press F2, go to plugins, select Team Training Plugin, and click the button to launch the UI.
 
 The new UI contains tabs for selecting training packs, assigning player roles, converting a custom training pack into a team training pack, and modifying the plugin's settings.
 
@@ -18,7 +18,7 @@ The plugin comes packaged with three packs: left, right, and infield. These pack
 
 Team training packs can be created using regular custom training packs. The way this works is by setting each player's position in separate drills within the custom training pack, and the starting ball's state is taken from the first passer.
 
-Opening the UI, clicking on the Creation tab, and filling in the number of offensive and defensive players will show the drill order at the bottom. For example, set offensive players to 3 and defensive players to 1. The drill order will show as shooter, followed by 2 passer drills, and end with 1 defender drill. This means that the first drill should be the shooter's position, the second drill will be the second passer position (passes to shooter from first passer's pass), the third drill will be the first passer position AND the ball's starting position and trajectory in the team training drill, and the fourth drill will be the defender's position. Therefore, these 4 drills will make up one team training drill. Repeat this pattern in the same custom training pack to have more than one team training drill.
+Entering the the number of offensive and defensive players in the Creation tab will show the drill order. For example, set offensive players to 3 and defensive players to 1. The drill order shows that the first drill should be the shooter's position, the second drill will be the second passer position (passes to shooter from first passer's pass), the third drill will be the first passer position AND the ball's starting position and trajectory in the team training drill, and the fourth drill will be the defender's position. These 4 drills will make up one team training drill. Repeat this pattern in the same custom training pack to have more than one team training drill.
 
 Once you have prepared your custom training pack, open the custom training pack to the first drill, open the Team Training plugin's UI, fill in the correct details, and press the convert button. The plugin should close the UI and automatically skip through the drills while retrieving the data necessary for the team training pack (don't press anything while this is happening). Once it's done recording the data, it will stop skipping through the drills and a toast notification will display saying it's completed (if you have toast notifications enabled). If you bring up the plugin's UI, your pack should now show in the pack selection tab.
 
@@ -45,6 +45,11 @@ Set `cl_team_training` to 1 to randomize the shots in the training pack, and `cl
 **Deprecated, may no longer work:** To convert the custom training pack into a team training pack, the plugin comes with a `write_shot_info` command that can be run from the console. You must pass in 4 arguments to this command: the number of offensive players, the number of defensive players, the total number of drills that will be in the final team training pack, and a name for the training pack file (don't use spaces). To convert the custom training pack described above, you would run `write_shot_info 3 1 3 filename`, as there are 3 offensive players, 1 defensive player, and 3 team training drills. For each shooting drill, you will need to supply some sort of user input in order for the ball position and trajectory to be recorded. No user input is needed for any of the other drills.
 
 # Changelog
+
+v0.2.4
+* Fixed bindings not resetting when leaving freeplay/unloading plugin after loading a pack
+* Bindings will no longer be set when a pack fails to load
+* Added more checks to prevent issues when commands are misused
 
 v0.2.3
 * Added some checks to prevent crashes due to misuse

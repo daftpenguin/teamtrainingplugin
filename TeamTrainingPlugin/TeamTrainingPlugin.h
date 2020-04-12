@@ -39,6 +39,7 @@ private:
 	void setShot(int shot);
 	void resetShot();
 	void setPlayerToCar(TrainingPackPlayer player, CarWrapper car);
+	Vector addBallVariance(Vector location);
 	bool validatePlayers(ServerWrapper tutorial);
 	std::map<std::string, TrainingPack> getTrainingPacks();
 

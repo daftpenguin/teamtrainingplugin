@@ -69,7 +69,7 @@ void TrainingPack::load(std::string filepath)
 	}
 	else {
 		version = js["version"].get<unsigned int>();
-		if (version == 2) {
+		if (version >= 2) {
 			description = js["description"].get<std::string>();
 			creator = js["creator"].get<std::string>();
 			code = js["code"].get<std::string>();
@@ -163,6 +163,11 @@ TrainingPackBall TrainingPack::parseBall(json js_ball)
 	ball.velocity = parseVector(js_ball["velocity"]);
 	ball.torque = parseVector(js_ball["torque"]);
 	ball.rotation = parseRotator(js_ball["rotation"]);
+	if (js_ball.contains("angular")) {
+		ball.angular = parseVector(js_ball["angular"]);
+	} else {
+		ball.angular = Vector{ 0, 0, 0 };
+	}
 	return ball;
 }
 

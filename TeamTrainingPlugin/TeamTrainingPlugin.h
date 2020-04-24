@@ -5,7 +5,7 @@
 #include "bakkesmod\plugin\bakkesmodplugin.h"
 #include "bakkesmod\plugin\pluginwindow.h"
 
-#include "imgui/imgui.h"
+#include "imgui\imgui.h"
 
 #include "TrainingPack.h"
 
@@ -28,18 +28,22 @@ private:
 	void randomizePlayers(std::vector<std::string> params);
 	void cyclePlayers(std::vector<std::string> params);
 	void listPacks(std::vector<std::string> params);
-	void test(std::vector<std::string> params);
+	//void test(std::vector<std::string> params);
 
 	// Hooks
 	void onGoalScored(std::string eventName);
 	void onResetShotEvent(std::string eventName);
 	void onFreeplayDestroyed(std::string eventName);
 
+	// Drill variance functions
+	TrainingPackDrill createDrillVariant(TrainingPackDrill drill);
+	TrainingPackPlayer addCarVariance(TrainingPackPlayer car);
+	TrainingPackBall addBallVariance(TrainingPackBall location);
+
 	// Helper functions
 	void setShot(int shot);
 	void resetShot();
 	void setPlayerToCar(TrainingPackPlayer player, CarWrapper car);
-	Vector addBallVariance(Vector location);
 	bool validatePlayers(ServerWrapper tutorial);
 	std::map<std::string, TrainingPack> getTrainingPacks();
 
@@ -64,6 +68,7 @@ private:
 	int drills_written = 0;
 	TrainingPackBall custom_training_ball;
 	bool custom_training_ball_velocity_set = false;
+	bool custom_training_written = false;
 	std::vector<TrainingPackPlayer> custom_training_players;
 
 /*
@@ -90,9 +95,8 @@ private:
 	char description[500] = "";
 	char code[20] = "";
 	// Settings
-	bool randomize = false;
 	char countdown[10] = "1.0";
-	//ImGui::FileBrowser fileDialog = ImGui::FileBrowser(ImGuiFileBrowserFlags_CloseOnEsc | ImGuiFileBrowserFlags_SingleClickDir | ImGuiFileBrowserFlags_SortIgnoreCase);
+
 public:
 	void Render();
 	std::string GetMenuName();
@@ -102,5 +106,9 @@ public:
 	bool IsActiveOverlay();
 	void OnOpen();
 	void OnClose();
+
+private:
+	static constexpr char CFG_FILE[] = "team_training.cfg";
+	static constexpr char RESET_CFG_FILE[] = "default_training.cfg";
 };
 

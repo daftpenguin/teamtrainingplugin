@@ -206,7 +206,10 @@ void TeamTrainingPlugin::Render()
 			ImGui::TextWrapped("Enter the number of offensive and defensive players below, and the ordering of each drill to the corresponding player position will show.");
 			ImGui::TextWrapped("Repeat this pattern for more than one drill in the team training pack.");
 			ImGui::TextWrapped("After creating the custom training pack, load it in, fill in all of the details below, then click the convert button.");
-			ImGui::TextWrapped("TURN OFF TRAINING VARIANCE BEFORE DOING CONVERSION");
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+			ImGui::TextWrapped("Turn off custom training variance before doing conversion.");
+			ImGui::TextWrapped("Number of drills is the total number of drills that will be in the final team training pack.");
+			ImGui::PopStyleColor();
 			ImGui::Separator();
 
 			if (errorMsgs["Creation"].size() > 0) {
@@ -219,10 +222,11 @@ void TeamTrainingPlugin::Render()
 			}
 
 			if (gameWrapper->IsInCustomTraining()) {
-				auto trainingMeta = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address).GetTrainingData();
+				auto trainingEditor = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address);
+				auto trainingSaveData = trainingEditor.GetTrainingData();
 
-				if (trainingMeta.GetbUnowned() == 1) {
-					auto training = trainingMeta.GetTrainingData();
+				if (trainingSaveData.GetbUnowned() == 1) {
+					auto training = trainingSaveData.GetTrainingData();
 					if (strcmp(training.GetCode().ToString().c_str(), code) != 0) {
 						::strncpy(code, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(code));
 						::strncpy(filename, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(filename));
@@ -299,12 +303,20 @@ void TeamTrainingPlugin::Render()
 		}
 
 		if (ImGui::BeginTabItem("Settings")) {
-			ImGui::Checkbox("Randomize", &randomize);
+			ImGui::TextWrapped("Plugin now utilizes the automatic mirroring, shuffling, and shot variance settings set in BakkesMod's Custom Training settings (F2 -> Custom Training tab)");
+			ImGui::Separator();
 			ImGui::InputText("Countdown after reset (in seconds)", countdown, IM_ARRAYSIZE(countdown), ImGuiInputTextFlags_CharsScientific);
 
 			if (ImGui::Button("Save")) {
-				cvarManager->executeCommand(CVAR_PREFIX + "randomize " + std::to_string(randomize));
 				cvarManager->executeCommand(CVAR_PREFIX + "countdown " + countdown);
+			}
+
+			ImGui::Separator();
+			ImGui::TextWrapped("Some of the \"Quick Settings\" buttons in BakkesMod's F2 screen will reset the bindings.");
+			ImGui::TextWrapped("Use this button to reload the Team Training bindings.");
+			
+			if (ImGui::Button("Load Team Training Bindings")) {
+				cvarManager->loadCfg(CFG_FILE);
 			}
 
 			ImGui::EndTabItem();
@@ -345,7 +357,6 @@ bool TeamTrainingPlugin::IsActiveOverlay()
 
 void TeamTrainingPlugin::OnOpen()
 {
-	randomize = cvarManager->getCvar(CVAR_PREFIX + "randomize").getBoolValue();
 	stringstream ss;
 	ss.precision(1);
 	ss << std::fixed << cvarManager->getCvar(CVAR_PREFIX + "countdown").getFloatValue();

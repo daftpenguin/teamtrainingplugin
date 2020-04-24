@@ -14,6 +14,18 @@ struct TrainingPackBall {
 	Vector velocity;
 	Vector torque;
 	Rotator rotation;
+	Vector angular;
+
+	inline TrainingPackBall clone()
+	{
+		return TrainingPackBall{
+			location.clone(),
+			velocity.clone(),
+			torque.clone(),
+			Rotator{ rotation.Pitch, rotation.Yaw, rotation.Roll },
+			angular.clone()
+		};
+	}
 };
 
 struct TrainingPackPlayer {
@@ -21,6 +33,15 @@ struct TrainingPackPlayer {
 	Vector location;
 	Vector velocity;
 	Rotator rotation;
+
+	inline TrainingPackPlayer clone() {
+		return TrainingPackPlayer{
+			boost,
+			location.clone(),
+			velocity.clone(),
+			Rotator{ rotation.Pitch, rotation.Yaw, rotation.Roll }
+		};
+	}
 };
 
 struct TrainingPackDrill {

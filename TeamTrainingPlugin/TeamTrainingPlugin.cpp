@@ -1,7 +1,7 @@
-// TODO: Defenders only drills, allow for consecutive or even simultaneous shots (multiple balls) to be taken on net that you have to save
-// TODO: Allow using packs without having enough players, and players can adjust their roles like shooter/defender, passer/shooter, passer/passer
+// TODO: Defense only drills?
+// TODO: Allow using packs without having enough players, with adjustable roles?
 // TODO: Make spectators actually spectators, or a way for them to become spectators?
-// TODO: Freeze players during countdown. Non-host players never get unfrozen. Some way to push unfreeze timer or something to their clients?
+// TODO: Freeze players during countdown. Non-host players never unfrozen. Replicate data to clients?
 // TODO: Allow users to upload packs (require codes?)
 // TODO: Why are cvars not being saved to config?
 // TODO: Add HUD?
@@ -14,6 +14,7 @@
 // TODO: Clarify the number of drills in GUI, and add some protections against crashes from misusage. Also clarify the intentions of the conversion (some people think this can be used on any random pack)
 // TODO: Can we allow users to edit the training packs in freeplay?
 // TODO: Can we "guess" a passer and ball's starting positions from a pack that hasn't been designed for team training?
+// TODO: Remove the internal convert command and call cvarManager->Execute("") from the GUI button instead.
 
 #define _USE_MATH_DEFINES
 
@@ -64,28 +65,38 @@ std::string vectorToString(std::vector<unsigned int> v) {
 void TeamTrainingPlugin::onLoad()
 {
 	// Usage
-	cvarManager->registerNotifier("team_train_load", std::bind(&TeamTrainingPlugin::onLoadTrainingPack, this, std::placeholders::_1), 
+	cvarManager->registerNotifier("team_train_load", 
+		std::bind(&TeamTrainingPlugin::onLoadTrainingPack, this, std::placeholders::_1), 
 		"Launches given team training pack", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
-	cvarManager->registerNotifier("team_train_reset", std::bind(&TeamTrainingPlugin::onResetShot, this, std::placeholders::_1),
+	cvarManager->registerNotifier("team_train_reset", 
+		std::bind(&TeamTrainingPlugin::onResetShot, this, std::placeholders::_1),
 		"Resets the current shot", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
-	cvarManager->registerNotifier("team_train_next", std::bind(&TeamTrainingPlugin::onNextShot, this, std::placeholders::_1),
+	cvarManager->registerNotifier("team_train_next", 
+		std::bind(&TeamTrainingPlugin::onNextShot, this, std::placeholders::_1),
 		"Loads the next shot in the pack", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
-	cvarManager->registerNotifier("team_train_prev", std::bind(&TeamTrainingPlugin::onPrevShot, this, std::placeholders::_1),
+	cvarManager->registerNotifier("team_train_prev", 
+		std::bind(&TeamTrainingPlugin::onPrevShot, this, std::placeholders::_1),
 		"Loads the previous shot in the pack", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
-	cvarManager->registerNotifier("team_train_list", std::bind(&TeamTrainingPlugin::listPacks, this, std::placeholders::_1),
+	cvarManager->registerNotifier("team_train_list", 
+		std::bind(&TeamTrainingPlugin::listPacks, this, std::placeholders::_1),
 		"Lists available packs", PERMISSION_ALL);
 
 	// Role assignment
-	cvarManager->registerNotifier("team_train_randomize_players", std::bind(&TeamTrainingPlugin::randomizePlayers, this, std::placeholders::_1),
+	cvarManager->registerNotifier("team_train_randomize_players",
+		std::bind(&TeamTrainingPlugin::randomizePlayers, this, std::placeholders::_1),
 		"Randomizes the assignments of players to roles", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
-	cvarManager->registerNotifier("team_train_cycle_players", std::bind(&TeamTrainingPlugin::cyclePlayers, this, std::placeholders::_1),
+	cvarManager->registerNotifier("team_train_cycle_players",
+		std::bind(&TeamTrainingPlugin::cyclePlayers, this, std::placeholders::_1),
 		"Cycles the assignments of players to roles", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
 
 	// Creation
-	cvarManager->registerNotifier("write_shot_info", std::bind(&TeamTrainingPlugin::writeShotInfo, this, std::placeholders::_1),
+	cvarManager->registerNotifier("write_shot_info", 
+		std::bind(&TeamTrainingPlugin::writeShotInfo, this, std::placeholders::_1),
 		"Print car and ball location of current training drill", PERMISSION_CUSTOM_TRAINING | PERMISSION_PAUSEMENU_CLOSED);
-	cvarManager->registerNotifier("team_train_internal_convert", std::bind(&TeamTrainingPlugin::internalConvert, this, std::placeholders::_1),
-		"Converts custom training pack into team training pack (intended for internal use through GUI)", PERMISSION_CUSTOM_TRAINING | PERMISSION_PAUSEMENU_CLOSED);
+	cvarManager->registerNotifier("team_train_internal_convert", 
+		std::bind(&TeamTrainingPlugin::internalConvert, this, std::placeholders::_1),
+		"Converts custom training pack into team training pack (intended for internal use through GUI)",
+		PERMISSION_CUSTOM_TRAINING | PERMISSION_PAUSEMENU_CLOSED);
 	
 	// Variables
 	cvarManager->registerCvar(CVAR_PREFIX + "countdown", "1", "Time to wait until shot begins", true, true, 0, true, 10, true);
@@ -136,9 +147,12 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 
 	if (firstPack) {
 		cvarManager->loadCfg(CFG_FILE);
-		gameWrapper->HookEventPost("Function GameEvent_Soccar_TA.PostGoalScored.BeginState", std::bind(&TeamTrainingPlugin::onGoalScored, this, std::placeholders::_1));
-		gameWrapper->HookEventPost("Function TAGame.GameEvent_TA.StartEvent", std::bind(&TeamTrainingPlugin::onResetShotEvent, this, std::placeholders::_1));
-		gameWrapper->HookEventPost("Function TAGame.GameEvent_Soccar_TA.Destroyed", std::bind(&TeamTrainingPlugin::onFreeplayDestroyed, this, std::placeholders::_1));
+		gameWrapper->HookEventPost("Function GameEvent_Soccar_TA.PostGoalScored.BeginState", 
+			std::bind(&TeamTrainingPlugin::onGoalScored, this, std::placeholders::_1));
+		gameWrapper->HookEventPost("Function TAGame.GameEvent_TA.StartEvent", 
+			std::bind(&TeamTrainingPlugin::onResetShotEvent, this, std::placeholders::_1));
+		gameWrapper->HookEventPost("Function TAGame.GameEvent_Soccar_TA.Destroyed", 
+			std::bind(&TeamTrainingPlugin::onFreeplayDestroyed, this, std::placeholders::_1));
 	}
 
 	cvarManager->log("Loaded training pack: " + this->pack->filepath);
@@ -311,11 +325,15 @@ sv_training_var_car_rot "0" //Randomly changes the car rotation by this amount (
 	ball.velocity = ball.velocity * (magnitude * (1 + cvarManager->getCvar("sv_training_var_speed").getFloatValue() / 100));
 
 	// Random spin
-	// This is probably incorrect, but choose a point on a unit sphere with uniform distribution, then multiply with randomly chosen magnitude
+	// This is probably incorrect, but choose a random point on the surface of a unit sphere with uniform distribution.
+	// Then multiply with randomly chosen magnitude.
 	float z = -1.0 + 2.0 * dist(gen);
 	float longitude = 2.0 * M_PI * dist(gen);
 	float rh = sin(acos(z));
-	ball.angular = ball.angular + (Vector{ rh * cos(longitude), rh * sin(longitude), z } * (cvarManager->getCvar("sv_training_var_spin").getFloatValue()));
+	ball.angular = ball.angular + (Vector{
+		rh * cos(longitude),
+		rh * sin(longitude),
+		z } * (cvarManager->getCvar("sv_training_var_spin").getFloatValue()));
 	cvarManager->log("Spin added: " + vectorString(ball.angular));
 
 	return ball;
@@ -424,7 +442,8 @@ bool TeamTrainingPlugin::validatePlayers(ServerWrapper tutorial)
 	// Validate the number of players
 	int num_players = tutorial.GetCars().Count();
 	if (num_players < pack->offense) {
-		cvarManager->log("Pack requires at least " + std::to_string(pack->offense) + " players but there are only " + std::to_string(num_players));
+		cvarManager->log("Pack requires at least " + std::to_string(pack->offense) + " players but there are only " + \
+			std::to_string(num_players));
 		return false;
 	}
 
@@ -532,7 +551,8 @@ void TeamTrainingPlugin::getNextShot()
 		custom_training_ball.location = ball.GetLocation().clone();
 		custom_training_ball.rotation = cloneRotation(ball.GetRotation());
 		custom_training_ball_velocity_set = false;
-		gameWrapper->HookEventPost("Function GameEvent_Soccar_TA.Active.Tick", std::bind(&TeamTrainingPlugin::onBallTick, this, std::placeholders::_1));
+		gameWrapper->HookEventPost("Function GameEvent_Soccar_TA.Active.Tick", 
+			std::bind(&TeamTrainingPlugin::onBallTick, this, std::placeholders::_1));
 		gameWrapper->GetPlayerController().ToggleBoost(1);
 	} else {
 		// Write to file if drill is complete, or move to the next shot
@@ -540,7 +560,8 @@ void TeamTrainingPlugin::getNextShot()
 			writeDrillToFile();
 		}
 		else {
-			gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
+			gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", 
+				std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
 			cvarManager->executeCommand("sv_training_next");
 		}
 	}
@@ -564,8 +585,10 @@ void TeamTrainingPlugin::writeDrillToFile()
 
 	// Sure I should have used the json library, but this got the job done... Don't judge me :(
 	custom_training_export_file
-		<< "\t\t{\n\t\t\t\"ball\": {\n\t\t\t\t\"location\": " << vectorString(custom_training_ball.location) << ",\n\t\t\t\t\"velocity\": " << vectorString(custom_training_ball.velocity) << ",\n"
-		<< "\t\t\t\t\"torque\": { \"x\": 0, \"y\": 0, \"z\": 0 },\n\t\t\t\t\"rotation\": " << rotationString(custom_training_ball.rotation) << ",\n\t\t\t\t\"angular\": "
+		<< "\t\t{\n\t\t\t\"ball\": {\n\t\t\t\t\"location\": " << vectorString(custom_training_ball.location)
+		<< ",\n\t\t\t\t\"velocity\": " << vectorString(custom_training_ball.velocity) << ",\n"
+		<< "\t\t\t\t\"torque\": { \"x\": 0, \"y\": 0, \"z\": 0 },\n\t\t\t\t\"rotation\": "
+		<< rotationString(custom_training_ball.rotation) << ",\n\t\t\t\t\"angular\": "
 		<< vectorString(custom_training_ball.angular) << "\n\t\t\t},\n\t\t\t\"players\": [\n";
 
 	int i = 0;
@@ -576,8 +599,10 @@ void TeamTrainingPlugin::writeDrillToFile()
 			custom_training_export_file << ",\n";
 		}
 		custom_training_export_file
-			<< "\t\t\t\t{\n\t\t\t\t\t\"role\": \"" << role << "\",\n\t\t\t\t\t\"boost\": " << std::to_string(player.boost) << ",\n\t\t\t\t\t\"location\": " << vectorString(player.location)
-			<< ",\n\t\t\t\t\t\"velocity\": " << vectorString(player.velocity) << ",\n\t\t\t\t\t\"rotation\": " << rotationString(player.rotation) << "\n\t\t\t\t}";
+			<< "\t\t\t\t{\n\t\t\t\t\t\"role\": \"" << role << "\",\n\t\t\t\t\t\"boost\": " << std::to_string(player.boost) 
+			<< ",\n\t\t\t\t\t\"location\": " << vectorString(player.location)
+			<< ",\n\t\t\t\t\t\"velocity\": " << vectorString(player.velocity) << ",\n\t\t\t\t\t\"rotation\": " 
+			<< rotationString(player.rotation) << "\n\t\t\t\t}";
 		i++;
 	}
 
@@ -587,7 +612,8 @@ void TeamTrainingPlugin::writeDrillToFile()
 	custom_training_players.clear();
 	if (++drills_written < num_drills) {
 		custom_training_export_file << ",\n";
-		gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
+		gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", 
+			std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
 		gameWrapper->SetTimeout([&, &_cvarManager = cvarManager](GameWrapper *gw) {
 			cvarManager->executeCommand("sv_training_next");
 		}, 1.0f);
@@ -619,11 +645,12 @@ void TeamTrainingPlugin::onBallTick(std::string eventName)
 		gameWrapper->UnhookEvent("Function GameEvent_Soccar_TA.Active.Tick");
 		gameWrapper->GetPlayerController().ToggleBoost(0);
 		custom_training_ball.velocity = ball.GetVelocity().clone();
-		custom_training_ball.angular = ball.GetAngularVelocity().clone(); // This seems to always be { 0, 0, 0 }, at least when we apply spin in BM with no spin in pack
+		custom_training_ball.angular = ball.GetAngularVelocity().clone(); // Seems to always be 0, even with ball spin on...
 		if (defense == 0) {
 			writeDrillToFile();
 		} else {
-			gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm", std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
+			gameWrapper->HookEventPost("Function TAGame.GameEvent_TrainingEditor_TA.OnResetRoundConfirm",
+				std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
 			cvarManager->executeCommand("sv_training_next");
 		}
 	}

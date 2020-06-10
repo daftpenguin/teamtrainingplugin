@@ -15,6 +15,8 @@
 // TODO: Can we allow users to edit the training packs in freeplay?
 // TODO: Can we "guess" a passer and ball's starting positions from a pack that hasn't been designed for team training?
 // TODO: Remove the internal convert command and call cvarManager->Execute("") from the GUI button instead.
+// TODO: Fix player order. There's probably issues when some players leave/join.
+// TODO: Don't crash if data/teamtraining doesn't exist...
 
 #define _USE_MATH_DEFINES
 
@@ -103,12 +105,37 @@ void TeamTrainingPlugin::onLoad()
 
 	gameWrapper->LoadToastTexture("teamtraining1", ".\\bakkesmod\\data\\assets\\teamtraining_logo.png");
 
+	gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
+		"Function TAGame.GameEvent_TA.AddCar",
+		std::bind(&TeamTrainingPlugin::onPlayerLeave, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+	gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
+		"Function TAGame.GameEvent_TA.RemoveCar",
+		std::bind(&TeamTrainingPlugin::onPlayerJoin, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+
 	//cvarManager->registerNotifier("team_train_test", std::bind(&TeamTrainingPlugin::test, this, std::placeholders::_1), "test", PERMISSION_ALL);
 }
 
 /*void TeamTrainingPlugin::test(std::vector<std::string> params)
 {	
 }*/
+
+void TeamTrainingPlugin::onPlayerLeave(PlayerControllerWrapper pc, void* params, string eventName)
+{
+	if (!gameWrapper->IsInFreeplay() || pc.IsNull()) {
+		return;
+	}
+
+	cvarManager->log("Player left: " + pc.GetPRI().GetPlayerName().ToString());
+}
+
+void TeamTrainingPlugin::onPlayerJoin(PlayerControllerWrapper pc, void* params, string eventName)
+{
+	if (!gameWrapper->IsInFreeplay() || pc.IsNull()) {
+		return;
+	}
+
+	cvarManager->log("Player joined: " + pc.GetPRI().GetPlayerName().ToString());
+}
 
 void TeamTrainingPlugin::onUnload()
 {
@@ -125,7 +152,11 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 	if (!gameWrapper->IsInFreeplay()) {
 		return;
 	}
-	ServerWrapper tutorial = gameWrapper->GetGameEventAsServer();
+	ServerWrapper server = gameWrapper->GetGameEventAsServer();
+	if (server.IsNull()) {
+		cvarManager->log("Server is null, cannot load pack");
+		return;
+	}
 
 	if (params.size() < 2) {
 		cvarManager->log("Must provide the name of an existing training pack");
@@ -160,14 +191,14 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 		std::random_shuffle(pack->drills.begin(), pack->drills.end());
 	}
 
-	if (!validatePlayers(tutorial)) {
+	if (!validatePlayers(server)) {
 		return;
 	}
 
-	ArrayWrapper<CarWrapper> cars = tutorial.GetCars();
-	if (player_order.size() < cars.Count()) {
+	int carCount = server.GetCars().Count();
+	if (player_order.size() < carCount) {
 		player_order.clear();
-		for (int i = 0; i < cars.Count(); i++) {
+		for (int i = 0; i < carCount; i++) {
 			player_order.push_back(i);
 		}
 	}
@@ -193,13 +224,17 @@ void TeamTrainingPlugin::setShot(int shot)
 		return;
 	}
 
-	ServerWrapper tutorial = gameWrapper->GetGameEventAsServer();
+	ServerWrapper server = gameWrapper->GetGameEventAsServer();
+	if (server.IsNull()) {
+		cvarManager->log("Server is null, cannot continue to set shot");
+		return;
+	}
 
 	unsigned int shot_set = last_shot_set + 1;
 	last_shot_set = shot_set;
 	goal_was_scored = false;
 
-	if (!validatePlayers(tutorial)) {
+	if (!validatePlayers(server)) {
 		return;
 	}
 
@@ -210,12 +245,19 @@ void TeamTrainingPlugin::setShot(int shot)
 		drill = createDrillVariant(drill);
 	}
 
-	ArrayWrapper<BallWrapper> balls = tutorial.GetGameBalls();
-	if (balls.Count() < 1) {
-		cvarManager->log("Cannot retrieve ball");
+	// Make sure we can get ball and all cars first
+	BallWrapper ball = server.GetBall();
+	if (ball.IsNull()) {
+		cvarManager->log("Ball is null, cannot setup shot");
+		return;
 	}
-	BallWrapper ball = balls.Get(0);
-	ArrayWrapper<CarWrapper> cars = tutorial.GetCars();
+	ArrayWrapper<CarWrapper> cars = server.GetCars();
+	for (int i = 0; i < cars.Count(); i++) {
+		if (cars.Get(i).IsNull()) {
+			cvarManager->log("Car " + to_string(i) + " is null, cannot setup shot");
+			return;
+		}
+	}
 
 	// Stop all cars and ball
 	for (int i = 0; i < cars.Count(); i++) {

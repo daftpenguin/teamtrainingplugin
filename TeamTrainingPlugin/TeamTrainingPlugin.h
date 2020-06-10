@@ -30,6 +30,10 @@ private:
 	void listPacks(std::vector<std::string> params);
 	//void test(std::vector<std::string> params);
 
+	// Player tracking
+	void onPlayerLeave(PlayerControllerWrapper pc, void* params, string eventName);
+	void onPlayerJoin(PlayerControllerWrapper pc, void* params, string eventName);
+
 	// Hooks
 	void onGoalScored(std::string eventName);
 	void onResetShotEvent(std::string eventName);

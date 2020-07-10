@@ -9,7 +9,7 @@
 
 #include "TrainingPack.h"
 
-using namespace placeholders;
+using namespace std;
 
 const std::string CVAR_PREFIX("cl_team_training_");
 
@@ -31,8 +31,8 @@ private:
 	//void test(std::vector<std::string> params);
 
 	// Player tracking
-	void onPlayerLeave(PlayerControllerWrapper pc, void* params, string eventName);
-	void onPlayerJoin(PlayerControllerWrapper pc, void* params, string eventName);
+	//void onPlayerLeave(PlayerControllerWrapper pc, void* params, string eventName);
+	//void onPlayerJoin(PlayerControllerWrapper pc, void* params, string eventName);
 
 	// Hooks
 	void onGoalScored(std::string eventName);

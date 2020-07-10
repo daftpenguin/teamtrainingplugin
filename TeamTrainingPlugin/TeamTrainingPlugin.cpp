@@ -34,6 +34,7 @@
 #include <cmath>
 
 namespace fs = std::experimental::filesystem;
+using namespace std;
 
 #pragma comment (lib, "Ws2_32.lib")
 
@@ -105,12 +106,12 @@ void TeamTrainingPlugin::onLoad()
 
 	gameWrapper->LoadToastTexture("teamtraining1", ".\\bakkesmod\\data\\assets\\teamtraining_logo.png");
 
-	gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
+	/*gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
 		"Function TAGame.GameEvent_TA.AddCar",
 		std::bind(&TeamTrainingPlugin::onPlayerLeave, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 	gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
 		"Function TAGame.GameEvent_TA.RemoveCar",
-		std::bind(&TeamTrainingPlugin::onPlayerJoin, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+		std::bind(&TeamTrainingPlugin::onPlayerJoin, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));*/
 
 	//cvarManager->registerNotifier("team_train_test", std::bind(&TeamTrainingPlugin::test, this, std::placeholders::_1), "test", PERMISSION_ALL);
 }
@@ -119,23 +120,23 @@ void TeamTrainingPlugin::onLoad()
 {	
 }*/
 
-void TeamTrainingPlugin::onPlayerLeave(PlayerControllerWrapper pc, void* params, string eventName)
-{
-	if (!gameWrapper->IsInFreeplay() || pc.IsNull()) {
-		return;
-	}
-
-	cvarManager->log("Player left: " + pc.GetPRI().GetPlayerName().ToString());
-}
-
-void TeamTrainingPlugin::onPlayerJoin(PlayerControllerWrapper pc, void* params, string eventName)
-{
-	if (!gameWrapper->IsInFreeplay() || pc.IsNull()) {
-		return;
-	}
-
-	cvarManager->log("Player joined: " + pc.GetPRI().GetPlayerName().ToString());
-}
+//void TeamTrainingPlugin::onPlayerLeave(PlayerControllerWrapper pc, void* params, string eventName)
+//{
+//	if (!gameWrapper->IsInFreeplay() || pc.IsNull()) {
+//		return;
+//	}
+//
+//	cvarManager->log("Player left: " + pc.GetPRI().GetPlayerName().ToString());
+//}
+//
+//void TeamTrainingPlugin::onPlayerJoin(PlayerControllerWrapper pc, void* params, string eventName)
+//{
+//	if (!gameWrapper->IsInFreeplay() || pc.IsNull()) {
+//		return;
+//	}
+//
+//	cvarManager->log("Player joined: " + pc.GetPRI().GetPlayerName().ToString());
+//}
 
 void TeamTrainingPlugin::onUnload()
 {

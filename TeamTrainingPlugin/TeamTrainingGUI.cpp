@@ -3,6 +3,8 @@
 #include <sstream>
 #include <boost/algorithm/string/replace.hpp>
 
+using namespace std;
+
 int filenameFilter(ImGuiTextEditCallbackData* data) {
 	switch (data->EventChar) {
 	case ' ': case '"': case '*': case '<': case'>': case '?': case '\\': case '|': case '/': case ':':

@@ -7,7 +7,7 @@
 // TODO: Add HUD?
 // TODO: Shot variance
 // TODO: Generate shots from replays into packs
-// TODO: SpectatorShortcut for a consistent ordering of players? Or just used player IDs?
+// TODO: SpectatorShortcut for a consistent ordering of players? Or just use player IDs?
 // TODO: Add randomize and cycle buttons role assignments in UI
 // TODO: Using quick settings clears bindings. Anything we can do about this?
 // TODO: Investigate retrieving angular velocity from training packs (why is there no angular velocity when we set the spin in BM even when we wait for the ball to start moving?)
@@ -17,6 +17,7 @@
 // TODO: Remove the internal convert command and call cvarManager->Execute("") from the GUI button instead.
 // TODO: Fix player order. There's probably issues when some players leave/join.
 // TODO: Don't crash if data/teamtraining doesn't exist...
+// TODO: Disable auto shuffle in custom training when creating training pack.
 
 #define _USE_MATH_DEFINES
 
@@ -105,6 +106,7 @@ void TeamTrainingPlugin::onLoad()
 	cvarManager->registerCvar(CVAR_PREFIX + "countdown", "1", "Time to wait until shot begins", true, true, 0, true, 10, true);
 
 	gameWrapper->LoadToastTexture("teamtraining1", ".\\bakkesmod\\data\\assets\\teamtraining_logo.png");
+
 
 	/*gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
 		"Function TAGame.GameEvent_TA.AddCar",
@@ -312,6 +314,7 @@ void TeamTrainingPlugin::setShot(int shot)
 			return;
 		}
 
+		TrainingPackDrill drill = pack->drills[current_shot];
 		BallWrapper ball = sw.GetBall();
 		ball.SetRotation(drill.ball.rotation);
 		ball.SetVelocity(drill.ball.velocity);

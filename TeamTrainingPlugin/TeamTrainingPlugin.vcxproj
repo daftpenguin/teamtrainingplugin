@@ -127,6 +127,12 @@
       <AdditionalLibraryDirectories>C:\Program Files %28x86%29\Steam\steamapps\common\rocketleague\Binaries\Win64\bakkesmod\bakkesmodsdk\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <SubSystem>Console</SubSystem>
     </Link>
+    <PostBuildEvent>
+      <Command>$(SolutionDir)..\bakkesmod-patch.exe $(SolutionDir)x64\Release\TeamTrainingPlugin.dll</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Patch dll after build</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="imgui\imconfig.h" />

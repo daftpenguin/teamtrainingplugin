@@ -60,6 +60,7 @@ private:
 	// Properties for printing custom training
 	void writeShotInfo(std::vector<std::string> params);
 	void internalConvert(std::vector<std::string> params);
+	void convert(int offense, int defense, int num_drills, std::string filename, std::string creator, std::string description, std::string code);
 	void onNextRound(std::string eventName);
 	void onBallTick(std::string eventName);
 	void writeDrillToFile();

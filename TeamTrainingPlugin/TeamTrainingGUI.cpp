@@ -57,87 +57,96 @@ void TeamTrainingPlugin::Render()
 				}
 			}
 
-			// Left Selection
-			static int selected = 0;
-			ImGui::BeginChild("left pane", ImVec2(150, 0), true);
-			int i = 0;
-			for (auto pack : packs) {
-				pack_keys.push_back(pack.first);
-				if (pack.second.errorMsg != "") {
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-				}
-				if (ImGui::Selectable(pack.first.c_str(), selected == i)) {
-					selected = i;
-				}
-				if (pack.second.errorMsg != "") {
-					ImGui::PopStyleColor();
-				}
-				if (selected == i) {
-					ImGui::SetItemDefaultFocus();
-				}
-				i++;
+			if (packs.size() == 0) {
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+				ImGui::TextWrapped("No training packs exist in %s", DRILL_FILES_DIR);
+				ImGui::TextWrapped("Plugin comes packaged with 3 training packs.");
+				ImGui::TextWrapped("Try reinstalling or unzipping the training packs from the Team Training plugin download on bakkesplugins.com.");
+				ImGui::PopStyleColor();
 			}
-			ImGui::EndChild();
-			ImGui::SameLine();
-
-			// Right Details
-			std::string pack_key = pack_keys[selected];
-			TrainingPack pack = packs.at(pack_key);
-			ImGui::BeginGroup();
-			
-			if (pack.errorMsg == "") {
-				if (ImGui::Button("Load Team Training Pack")) {
-					errorMsgs["Selection"].clear();
-
-					if (!gameWrapper->IsInFreeplay()) {
-						errorMsgs["Selection"].push_back("You must be in a freeplay session to load a training pack. Use Rocket plugin to launch a multiplayer freeplay session with non-local players.");
+			else {
+				// Left Selection
+				static int selected = 0;
+				ImGui::BeginChild("left pane", ImVec2(150, 0), true);
+				int i = 0;
+				for (auto pack : packs) {
+					pack_keys.push_back(pack.first);
+					if (pack.second.errorMsg != "") {
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
 					}
-					else {
-						auto cars = gameWrapper->GetGameEventAsServer().GetCars();
-						if (cars.Count() < pack.offense) {
-							errorMsgs["Selection"].push_back("Pack requires " + std::to_string(pack.offense) + " players but there are only " + std::to_string(cars.Count()) + " in the lobby.");
+					if (ImGui::Selectable(pack.first.c_str(), selected == i)) {
+						selected = i;
+					}
+					if (pack.second.errorMsg != "") {
+						ImGui::PopStyleColor();
+					}
+					if (selected == i) {
+						ImGui::SetItemDefaultFocus();
+					}
+					i++;
+				}
+				ImGui::EndChild();
+				ImGui::SameLine();
+
+				// Right Details
+				std::string pack_key = pack_keys[selected];
+				TrainingPack pack = packs.at(pack_key);
+				ImGui::BeginGroup();
+
+				if (pack.errorMsg == "") {
+					if (ImGui::Button("Load Team Training Pack")) {
+						errorMsgs["Selection"].clear();
+
+						if (!gameWrapper->IsInFreeplay()) {
+							errorMsgs["Selection"].push_back("You must be in a freeplay session to load a training pack. Use Rocket plugin to launch a multiplayer freeplay session with non-local players.");
+						}
+						else {
+							auto cars = gameWrapper->GetGameEventAsServer().GetCars();
+							if (cars.Count() < pack.offense) {
+								errorMsgs["Selection"].push_back("Pack requires " + std::to_string(pack.offense) + " players but there are only " + std::to_string(cars.Count()) + " in the lobby.");
+							}
+						}
+
+						if (errorMsgs["Selection"].size() == 0) {
+							cvarManager->executeCommand("sleep 1; team_train_load " + pack_key);
+						}
+
+					}
+					if (pack.code != "") {
+						ImGui::SameLine();
+						if (ImGui::Button("Load Custom Training Pack")) {
+							cvarManager->executeCommand("sleep 1; load_training " + pack.code);
 						}
 					}
 
-					if (errorMsgs["Selection"].size() == 0) {
-						cvarManager->executeCommand("sleep 1; team_train_load " + pack_key);
-					}
+					ImGui::BeginChild("Training Pack Details", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below us
 
+					ImGui::Text(pack_key.c_str());
+					ImGui::Separator();
+					ImGui::Text("Creator: %s", pack.creator.c_str());
+					ImGui::Text("Description: %s", pack.description.c_str());
+					ImGui::Text("Offensive Players: %d", pack.offense);
+					ImGui::Text("Defensive Players: %d", pack.defense);
+					ImGui::Text("Drills: %d", pack.drills.size());
+					ImGui::Text("Code: %s", pack.code.c_str());
+					ImGui::Text("Filepath: %s", pack.filepath.c_str());
+
+					ImGui::EndChild();
 				}
-				if (pack.code != "") {
-					ImGui::SameLine();
-					if (ImGui::Button("Load Custom Training Pack")) {
-						cvarManager->executeCommand("sleep 1; load_training " + pack.code);
-					}
+				else {
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+					ImGui::Text(pack_key.c_str());
+					ImGui::Separator();
+					ImGui::TextWrapped("Failed to load pack: %s", pack.errorMsg.c_str());
+					ImGui::TextWrapped("If you converted this pack yourself, please try again.");
+					ImGui::TextWrapped("If that does not work, please report this bug to daftpenguinrl@gmail.com, @PenguinDaft on Twitter, DaftPenguin#5103 on Discord, or report issue on http://github.com/daftpenguin/teamtrainingplugin.");
+					ImGui::TextWrapped("Please include the custom training pack code with your report and the json file at the location: %s.", pack.filepath.c_str());
+					ImGui::PopStyleColor();
 				}
 
-				ImGui::BeginChild("Training Pack Details", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below us
-
-				ImGui::Text(pack_key.c_str());
-				ImGui::Separator();
-				ImGui::Text("Creator: %s", pack.creator.c_str());
-				ImGui::Text("Description: %s", pack.description.c_str());
-				ImGui::Text("Offensive Players: %d", pack.offense);
-				ImGui::Text("Defensive Players: %d", pack.defense);
-				ImGui::Text("Drills: %d", pack.drills.size());
-				ImGui::Text("Code: %s", pack.code.c_str());
-				ImGui::Text("Filepath: %s", pack.filepath.c_str());
-
-				ImGui::EndChild();
+				ImGui::SameLine();
+				ImGui::EndGroup();
 			}
-			else {
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-				ImGui::Text(pack_key.c_str());
-				ImGui::Separator();
-				ImGui::TextWrapped("Failed to load pack: %s", pack.errorMsg.c_str());
-				ImGui::TextWrapped("If you converted this pack yourself, please try again.");
-				ImGui::TextWrapped("If that does not work, please report this bug to daftpenguinrl@gmail.com, @PenguinDaft on Twitter, DaftPenguin#5103 on Discord, or report issue on http://github.com/daftpenguin/teamtrainingplugin.");
-				ImGui::TextWrapped("Please include the custom training pack code with your report and the json file at the location: %s.", pack.filepath.c_str());
-				ImGui::PopStyleColor();
-			}
-			
-			ImGui::SameLine();
-			ImGui::EndGroup();
 
 			ImGui::EndTabItem();
 		}
@@ -205,13 +214,19 @@ void TeamTrainingPlugin::Render()
 
 		if (ImGui::BeginTabItem("Creation")) {
 			ImGui::TextWrapped("Team training packs can be generated from the single player custom training packs by separating each player's position into individual drills.");
+			ImGui::TextWrapped("This will NOT work out for any random custom training pack, you must design the pack in a specific way for this to conversion to work.");
 			ImGui::TextWrapped("Enter the number of offensive and defensive players below, and the ordering of each drill to the corresponding player position will show.");
-			ImGui::TextWrapped("Repeat this pattern for more than one drill in the team training pack.");
-			ImGui::TextWrapped("After creating the custom training pack, load it in, fill in all of the details below, then click the convert button.");
+			ImGui::TextWrapped("Using the custom training pack creator within the game, setup each drill using this pattern.");
+			ImGui::TextWrapped("After creating the custom training pack, load the pack up in game, fill in all of the details below, then click the convert button.");
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-			ImGui::TextWrapped("Turn off custom training variance before doing conversion.");
+			ImGui::TextWrapped("Turn off BakkesMod's playlist shuffling, mirroring, and custom training variance before doing conversion.");
 			ImGui::TextWrapped("Number of drills is the total number of drills that will be in the final team training pack.");
 			ImGui::PopStyleColor();
+			ImGui::Separator();
+			ImGui::TextWrapped("For example, convert WayProtein's training pack by loading it with the button below, enter 2 offensive players, 0 defensive players, and 8 drills. Then click convert.");
+			if (ImGui::Button("Load WayProtein's Passing (downfield left)")) {
+				cvarManager->executeCommand("sleep 1; load_training C833-6A35-A46A-7191");
+			}
 			ImGui::Separator();
 
 			if (errorMsgs["Creation"].size() > 0) {
@@ -305,7 +320,7 @@ void TeamTrainingPlugin::Render()
 		}
 
 		if (ImGui::BeginTabItem("Settings")) {
-			ImGui::TextWrapped("Plugin now utilizes the automatic mirroring, shuffling, and shot variance settings set in BakkesMod's Custom Training settings (F2 -> Custom Training tab)");
+			ImGui::TextWrapped("This plugin now utilizes the automatic shuffling and shot variance settings set in BakkesMod's Custom Training settings (F2 -> Custom Training tab).");
 			ImGui::Separator();
 			ImGui::InputText("Countdown after reset (in seconds)", countdown, IM_ARRAYSIZE(countdown), ImGuiInputTextFlags_CharsScientific);
 

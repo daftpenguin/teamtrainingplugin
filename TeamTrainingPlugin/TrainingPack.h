@@ -7,6 +7,8 @@
 #include <vector>
 #include <chrono>
 
+static constexpr char DRILL_FILES_DIR[] = ".\\bakkesmod\\data\\teamtraining\\";
+
 using json = nlohmann::json;
 
 struct TrainingPackBall {

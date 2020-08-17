@@ -5,19 +5,19 @@
 // TODO: Allow users to upload packs (require codes?)
 // TODO: Why are cvars not being saved to config?
 // TODO: Add HUD?
-// TODO: Shot variance
 // TODO: Generate shots from replays into packs
 // TODO: SpectatorShortcut for a consistent ordering of players? Or just use player IDs?
 // TODO: Add randomize and cycle buttons role assignments in UI
 // TODO: Using quick settings clears bindings. Anything we can do about this?
 // TODO: Investigate retrieving angular velocity from training packs (why is there no angular velocity when we set the spin in BM even when we wait for the ball to start moving?)
-// TODO: Clarify the number of drills in GUI, and add some protections against crashes from misusage. Also clarify the intentions of the conversion (some people think this can be used on any random pack)
+// TODO: Clarify the number of drills in GUI, and add some protections against crashes from misusage.
 // TODO: Can we allow users to edit the training packs in freeplay?
 // TODO: Can we "guess" a passer and ball's starting positions from a pack that hasn't been designed for team training?
-// TODO: Remove the internal convert command and call cvarManager->Execute("") from the GUI button instead.
+// TODO: Remove the internal convert command and call gameWrapper->Execute("") from the GUI button instead.
 // TODO: Fix player order. There's probably issues when some players leave/join.
-// TODO: Don't crash if data/teamtraining doesn't exist...
 // TODO: Disable auto shuffle in custom training when creating training pack.
+// TODO: Car variance?
+// TODO: Third player can't pickup boost sometimes. Resetting shot with regular reset shot binding works, but not with the dpad binding.
 
 #define _USE_MATH_DEFINES
 
@@ -233,14 +233,19 @@ void TeamTrainingPlugin::setShot(int shot)
 		return;
 	}
 
-	unsigned int shot_set = last_shot_set + 1;
-	last_shot_set = shot_set;
-	goal_was_scored = false;
-
 	if (!validatePlayers(server)) {
 		return;
 	}
 
+	if (shot >= pack->drills.size()) {
+		cvarManager->log("setShot called with shot that doesn't exist. Aborting...");
+		return;
+	}
+
+	// Set some data for the timer, before modifying anything
+	unsigned int shot_set = last_shot_set + 1;
+	last_shot_set = shot_set;
+	goal_was_scored = false;
 	current_shot = shot;
 
 	TrainingPackDrill drill = pack->drills[shot];
@@ -275,10 +280,14 @@ void TeamTrainingPlugin::setShot(int shot)
 			return;
 		}
 		CarWrapper car = cars.Get(player_order[i++]);
+		if (car.IsNull()) {
+			cvarManager->log("Car " + to_string(i-1) + " became null?");
+			return;
+		}
 		setPlayerToCar(player, car);
 	}
 
-	if (i >= cars.Count()) {
+	if (i >= cars.Count() || player_order[i] >= cars.Count() || cars.Get(player_order[i]).IsNull()) {
 		cvarManager->log("Cannot find shooter");
 		return;
 	}
@@ -291,6 +300,9 @@ void TeamTrainingPlugin::setShot(int shot)
 				break;
 			}
 			CarWrapper car = cars.Get(player_order[i++]);
+			if (car.IsNull()) {
+				cvarManager->log("Failed to get defender with index " + to_string(i - 1));
+			}
 			setPlayerToCar(player, car);
 		}
 	}
@@ -314,8 +326,17 @@ void TeamTrainingPlugin::setShot(int shot)
 			return;
 		}
 
+		if (current_shot >= pack->drills.size()) {
+			cvarManager->log("current_shot is more than number of drills? This shouldn't have happened...");
+			return;
+		}
+
 		TrainingPackDrill drill = pack->drills[current_shot];
 		BallWrapper ball = sw.GetBall();
+		if (ball.IsNull()) {
+			cvarManager->log("ball is null in timeout. Aborting...");
+			return;
+		}
 		ball.SetRotation(drill.ball.rotation);
 		ball.SetVelocity(drill.ball.velocity);
 		ball.SetAngularVelocity(drill.ball.angular, false);
@@ -483,10 +504,10 @@ void TeamTrainingPlugin::setPlayerToCar(TrainingPackPlayer player, CarWrapper ca
 	car.SetRotation(player.rotation);
 }
 
-bool TeamTrainingPlugin::validatePlayers(ServerWrapper tutorial)
+bool TeamTrainingPlugin::validatePlayers(ServerWrapper server)
 {
 	// Validate the number of players
-	int num_players = tutorial.GetCars().Count();
+	int num_players = server.GetCars().Count();
 	if (num_players < pack->offense) {
 		cvarManager->log("Pack requires at least " + std::to_string(pack->offense) + " players but there are only " + \
 			std::to_string(num_players));
@@ -499,11 +520,13 @@ bool TeamTrainingPlugin::validatePlayers(ServerWrapper tutorial)
 
 /* For extracting custom training pack to team training pack */
 
-Rotator cloneRotation(Rotator r) {
+Rotator cloneRotation(Rotator r)
+{
 	return Rotator(r.Pitch, r.Yaw, r.Roll);
 }
 
-void TeamTrainingPlugin::internalConvert(std::vector<std::string> params) {
+void TeamTrainingPlugin::internalConvert(std::vector<std::string> params)
+{
 	if (!gameWrapper->IsInCustomTraining()) {
 		cvarManager->log("Not in custom training");
 		return;
@@ -520,6 +543,18 @@ void TeamTrainingPlugin::internalConvert(std::vector<std::string> params) {
 	std::string description = params[6];
 	std::string code = params[7];
 
+	cvarManager->log("Saving data for pack: " + filename);
+	custom_training_export_file.open("bakkesmod\\data\\teamtraining\\" + filename + ".json");
+	custom_training_export_file
+		<< "{\n\t\"version\": 3,\n\t\"description\": \"" << description << "\",\n"
+		<< "\t\"creator\": \"" << creator << "\",\n"
+		<< "\t\"code\": \"" << code << "\",\n"
+		<< "\t\"offense\": " << offense << ",\n\t\"defense\": " << defense << ",\n\t\"drills\": [\n";
+	getNextShot();
+}
+
+void TeamTrainingPlugin::convert(int offense, int defense, int num_drills, std::string filename, std::string creator, std::string description, std::string code)
+{
 	cvarManager->log("Saving data for pack: " + filename);
 	custom_training_export_file.open("bakkesmod\\data\\teamtraining\\" + filename + ".json");
 	custom_training_export_file
@@ -702,10 +737,20 @@ void TeamTrainingPlugin::onBallTick(std::string eventName)
 	}
 }
 
+static inline bool dir_exists(const char *dirpath)
+{
+	DWORD ftyp = GetFileAttributes(dirpath);
+	return (ftyp != INVALID_FILE_ATTRIBUTES && ftyp & FILE_ATTRIBUTE_DIRECTORY);
+}
+
 std::map<std::string, TrainingPack> TeamTrainingPlugin::getTrainingPacks() {
 	std::map<std::string, TrainingPack> packs;
 
-	for (const auto & entry : fs::directory_iterator(".\\bakkesmod\\data\\teamtraining\\")) {
+	if (!dir_exists(DRILL_FILES_DIR)) {
+		return packs;
+	}
+
+	for (const auto & entry : fs::directory_iterator(DRILL_FILES_DIR)) {
 		if (entry.path().has_extension() && entry.path().extension() == ".json") {
 			packs.emplace(entry.path().filename().string(), TrainingPack(entry.path().string()));
 		}

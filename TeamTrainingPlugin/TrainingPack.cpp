@@ -8,8 +8,8 @@
 
 static inline bool file_exists(const std::string &filepath)
 {
-	GetFileAttributes(filepath.c_str());
-	return !(INVALID_FILE_ATTRIBUTES == GetFileAttributes(filepath.c_str()) && GetLastError() == ERROR_FILE_NOT_FOUND);
+	DWORD ftyp = GetFileAttributes(filepath.c_str());
+	return !(INVALID_FILE_ATTRIBUTES == ftyp && GetLastError() == ERROR_FILE_NOT_FOUND);
 }
 
 
@@ -34,7 +34,7 @@ TrainingPack::TrainingPack(std::string filepath) : filepath(filepath)
 		load(filepath);
 	}
 	else {
-		filepath = ".\\bakkesmod\\data\\teamtraining\\" + filepath;
+		filepath = DRILL_FILES_DIR + filepath;
 		this->filepath = filepath;
 		if (file_exists(filepath)) {
 			load(filepath);

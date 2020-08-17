@@ -233,10 +233,12 @@ void TeamTrainingPlugin::setShot(int shot)
 		return;
 	}
 
+	cvarManager->log("Validating players");
 	if (!validatePlayers(server)) {
 		return;
 	}
 
+	cvarManager->log("Checking shot number");
 	if (shot >= pack->drills.size()) {
 		cvarManager->log("setShot called with shot that doesn't exist. Aborting...");
 		return;
@@ -248,12 +250,14 @@ void TeamTrainingPlugin::setShot(int shot)
 	goal_was_scored = false;
 	current_shot = shot;
 
+	cvarManager->log("Retrieving shot and generating variant");
 	TrainingPackDrill drill = pack->drills[shot];
 	if (cvarManager->getCvar("sv_training_enabled").getBoolValue()) {
 		drill = createDrillVariant(drill);
 	}
 
 	// Make sure we can get ball and all cars first
+	cvarManager->log("Checking cars and ball exist");
 	BallWrapper ball = server.GetBall();
 	if (ball.IsNull()) {
 		cvarManager->log("Ball is null, cannot setup shot");
@@ -268,17 +272,26 @@ void TeamTrainingPlugin::setShot(int shot)
 	}
 
 	// Stop all cars and ball
+	cvarManager->log("Stopping cars and ball");
 	for (int i = 0; i < cars.Count(); i++) {
-		cars.Get(i).Stop();
+		CarWrapper car = cars.Get(i);
+		if (car.IsNull()) {
+			cvarManager->log("Car " + to_string(i) + " is null. Can't stop it.");
+		}
+		else {
+			car.Stop();
+		}
 	}
 	ball.Stop();
 
+	cvarManager->log("Setting passers to cars");
 	int i = 0;
 	for (auto player : drill.passers) {
 		if (player_order[i] >= cars.Count()) {
 			cvarManager->log("Not enough cars for passer positions");
 			return;
 		}
+		cvarManager->log(to_string(i) + " index, " + to_string(player_order[i]) + " assigned car");
 		CarWrapper car = cars.Get(player_order[i++]);
 		if (car.IsNull()) {
 			cvarManager->log("Car " + to_string(i-1) + " became null?");
@@ -287,18 +300,22 @@ void TeamTrainingPlugin::setShot(int shot)
 		setPlayerToCar(player, car);
 	}
 
+	cvarManager->log("Checking if can find shooter");
 	if (i >= cars.Count() || player_order[i] >= cars.Count() || cars.Get(player_order[i]).IsNull()) {
 		cvarManager->log("Cannot find shooter");
 		return;
 	}
 
+	cvarManager->log("Assigning shooter");
 	setPlayerToCar(drill.shooter, cars.Get(player_order[i++]));
 
+	cvarManager->log("Assigning defenders to cars");
 	if (cars.Count() > this->pack->offense) {
 		for (auto player : drill.defenders) {
 			if (player_order[i] >= cars.Count()) {
 				break;
 			}
+			cvarManager->log(to_string(i) + " index, " + to_string(player_order[i]) + " assigned car");
 			CarWrapper car = cars.Get(player_order[i++]);
 			if (car.IsNull()) {
 				cvarManager->log("Failed to get defender with index " + to_string(i - 1));
@@ -307,9 +324,12 @@ void TeamTrainingPlugin::setShot(int shot)
 		}
 	}
 
+	cvarManager->log("Setting ball location");
 	ball.SetLocation(drill.ball.location);
 	
+	cvarManager->log("Attaching timer");
 	float countdown = cvarManager->getCvar(CVAR_PREFIX + "countdown").getFloatValue();
+	cvarManager->log("Countdown: " + to_string(countdown));
 	auto pack_load_time = this->pack->load_time;
 	gameWrapper->SetTimeout([&, &_cvarManager = cvarManager, shot_set, pack_load_time](GameWrapper *gw) {
 		if (!gameWrapper->IsInFreeplay()) {
@@ -499,7 +519,11 @@ void TeamTrainingPlugin::onPrevShot(std::vector<std::string> params)
 
 void TeamTrainingPlugin::setPlayerToCar(TrainingPackPlayer player, CarWrapper car)
 {
-	car.GetBoostComponent().SetBoostAmount(player.boost);
+	//car.GetBoostComponent().SetBoostAmount(player.boost);
+	BoostWrapper boost = car.GetBoostComponent();
+	if (!boost.IsNull()) {
+		boost.SetBoostAmount(player.boost);
+	}
 	car.SetLocation(player.location);
 	car.SetRotation(player.rotation);
 }

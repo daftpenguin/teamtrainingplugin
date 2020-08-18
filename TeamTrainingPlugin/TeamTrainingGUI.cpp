@@ -338,6 +338,27 @@ void TeamTrainingPlugin::Render()
 
 			ImGui::EndTabItem();
 		}
+		
+		int whatsNewFlags = (cvarManager->getCvar(CVAR_PREFIX + "last_version_loaded").getStringValue().compare(PLUGIN_VERSION) != 0) ? ImGuiTabItemFlags_SetSelected : 0;
+		if (ImGui::BeginTabItem("What's new", NULL, whatsNewFlags)) {
+			cvarManager->executeCommand(CVAR_PREFIX + "last_version_loaded " + PLUGIN_VERSION + "; writeconfig");
+
+			ImGui::TextWrapped("Last update: v0.2.5 (Aug 18 2020)");
+			ImGui::TextWrapped("Changelog:");
+			ImGui::BulletText("Added what's new tab to share new changes when launching after plugin was updated");
+			ImGui::BulletText("Added support for drill shuffling and variance in drills using BakkesMod's built-in custom training options");
+			ImGui::BulletText("Fixed game crashing due to an incomplete install where training packs folder is missing");
+			ImGui::BulletText("Fixed game crashes caused by missing null checks");
+
+			ImGui::Separator();
+
+			ImGui::TextWrapped("If you experience any issues using this plugin, please let me know.");
+			ImGui::BulletText("Twitter: @PenguinDaft");
+			ImGui::BulletText("Discord: DaftPenguin#5103");
+			ImGui::BulletText("GitHub: github.com/daftpenguin/teamtrainingplugin");
+
+			ImGui::EndTabItem();
+		}
 
 		ImGui::EndTabBar();
 	}

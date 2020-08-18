@@ -11,6 +11,8 @@
 
 using namespace std;
 
+constexpr auto PLUGIN_VERSION = "0.2.5";
+
 const std::string CVAR_PREFIX("cl_team_training_");
 
 class TeamTrainingPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginWindow

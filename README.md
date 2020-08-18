@@ -46,6 +46,12 @@ Set `cl_team_training` to 1 to randomize the shots in the training pack, and `cl
 
 # Changelog
 
+v0.2.5
+* Added what's new tab to share new changes when launching after plugin was updated
+* Added support for drill shuffling and variance in drills using BakkesMod's built-in custom training options
+* Fixed game crashing due to an incomplete install where training packs folder is missing
+* Fixed game crashes caused by missing null checks
+
 v0.2.4
 * Fixed bindings not resetting when leaving freeplay/unloading plugin after loading a pack
 * Bindings will no longer be set when a pack fails to load

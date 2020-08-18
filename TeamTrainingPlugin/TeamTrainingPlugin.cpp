@@ -39,7 +39,7 @@ using namespace std;
 
 #pragma comment (lib, "Ws2_32.lib")
 
-BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", "0.2.5", PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING)
+BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", PLUGIN_VERSION, PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING)
 
 mt19937 gen(chrono::system_clock::now().time_since_epoch().count());
 uniform_real_distribution<float> dist(0.0, 1.0);
@@ -104,6 +104,8 @@ void TeamTrainingPlugin::onLoad()
 	
 	// Variables
 	cvarManager->registerCvar(CVAR_PREFIX + "countdown", "1", "Time to wait until shot begins", true, true, 0, true, 10, true);
+	cvarManager->registerCvar(CVAR_PREFIX + "last_version_loaded", "", "The last version of the plugin that was loaded, used for displaying changelog first when plugin is updated.",
+		false, false, 0, 0, 0, true);
 
 	gameWrapper->LoadToastTexture("teamtraining1", ".\\bakkesmod\\data\\assets\\teamtraining_logo.png");
 

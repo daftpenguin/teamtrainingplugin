@@ -11,6 +11,16 @@
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
+struct TrainingPackDBMetaData {
+	std::string code;
+	std::string description;
+	std::string creator;
+	int offense;
+	int defense;
+	int num_drills;
+	int downloads;
+};
+
 struct TrainingPackBall {
 	Vector location;
 	Vector velocity;

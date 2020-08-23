@@ -51,10 +51,6 @@ void TeamTrainingPlugin::Render()
 
 			if (packs.size() == 0) {
 				packs = getTrainingPacks();
-				pack_keys.clear();
-				for (auto pack : packs) {
-					pack_keys.push_back(pack.first);
-				}
 			}
 
 			if (packs.size() == 0) {
@@ -70,17 +66,16 @@ void TeamTrainingPlugin::Render()
 			else {
 				// Left Selection
 				static int selected = 0;
-				ImGui::BeginChild("left pane", ImVec2(150, 0), true);
+				ImGui::BeginChild("left pane", ImVec2(300, 0), true);
 				int i = 0;
 				for (auto pack : packs) {
-					pack_keys.push_back(pack.first);
-					if (pack.second.errorMsg != "") {
+					if (pack.errorMsg != "") {
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
 					}
-					if (ImGui::Selectable(pack.first.c_str(), selected == i)) {
+					if (ImGui::Selectable(pack.description.c_str(), selected == i)) {
 						selected = i;
 					}
-					if (pack.second.errorMsg != "") {
+					if (pack.errorMsg != "") {
 						ImGui::PopStyleColor();
 					}
 					if (selected == i) {
@@ -92,8 +87,7 @@ void TeamTrainingPlugin::Render()
 				ImGui::SameLine();
 
 				// Right Details
-				std::string pack_key = pack_keys[selected];
-				TrainingPack pack = packs.at(pack_key);
+				TrainingPack pack = packs[selected];
 				ImGui::BeginGroup();
 
 				if (pack.errorMsg == "") {
@@ -111,7 +105,7 @@ void TeamTrainingPlugin::Render()
 						}
 
 						if (errorMsgs["Selection"].size() == 0) {
-							cvarManager->executeCommand("sleep 1; team_train_load " + pack_key);
+							cvarManager->executeCommand("sleep 1; team_train_load " + pack.code);
 						}
 
 					}
@@ -124,7 +118,7 @@ void TeamTrainingPlugin::Render()
 
 					ImGui::BeginChild("Training Pack Details", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below us
 
-					ImGui::Text(pack_key.c_str());
+					ImGui::Text(pack.description.c_str());
 					ImGui::Separator();
 					ImGui::Text("Creator: %s", pack.creator.c_str());
 					ImGui::Text("Description: %s", pack.description.c_str());
@@ -138,7 +132,7 @@ void TeamTrainingPlugin::Render()
 				}
 				else {
 					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-					ImGui::Text(pack_key.c_str());
+					ImGui::Text(pack.description.c_str());
 					ImGui::Separator();
 					ImGui::TextWrapped("Failed to load pack: %s", pack.errorMsg.c_str());
 					ImGui::TextWrapped("If you converted this pack yourself, please try again.");
@@ -146,6 +140,97 @@ void TeamTrainingPlugin::Render()
 					ImGui::TextWrapped("Please include the custom training pack code with your report and the json file at the location: %s.", pack.filepath.c_str());
 					ImGui::PopStyleColor();
 				}
+
+				ImGui::SameLine();
+				ImGui::EndGroup();
+			}
+
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Download Drills")) {
+			// Allow filtering on offense, defense, tags, drill name, creator
+			// Allow code to be used to download pack
+
+			ImGui::TextWrapped("Download by code:");
+			ImGui::InputText("", searchState.code, IM_ARRAYSIZE(searchState.code));
+			
+			if (ImGui::Button("Download##ByCode")) {
+				DownloadPack(searchState.code);
+			}
+
+			ImGui::Separator();
+
+			// TODO: Specify 0 = none. Search on description. Search on creator.
+			// TODO: Sorting methods. Add notes section in metadata.
+			// TODO: How to determine which packs were downloaded vs created? How to determine which packs can be uploaded?
+			// TODO: Track uploader from creator (we're going to upload packs we don't own).
+			// TODO: Notes and other data should be updateable by both creator and uploader?
+			// TODO: Put training pack code in filename on server with timestamp.
+			// TODO: Allow comments and rating?
+
+			ImGui::TextWrapped("Search drills with filter options");
+			if (ImGui::InputInt("Offensive players", &searchState.offense, ImGuiInputTextFlags_CharsDecimal)) {
+				searchState.offense = (searchState.offense < 0) ? 0 : searchState.offense;
+			}
+			if (ImGui::InputInt("Defensive players", &searchState.defense, ImGuiInputTextFlags_CharsDecimal)) {
+				searchState.defense = (searchState.defense < 0) ? 0 : searchState.defense;
+			}
+
+			if (ImGui::Button("Search")) {
+				// TODO: RunPackSearch should set errors and we need to add display for it
+				RunPackSearch();
+			}
+
+			ImGui::Separator();
+
+			if (searchState.packs.size() == 0) {
+
+			}
+			else {
+				// Left Selection
+				static int selected = 0;
+				ImGui::BeginChild("left pane", ImVec2(150, 0), true);
+				int i = 0;
+				for (auto pack : searchState.packs) {
+					if (ImGui::Selectable(pack.description.c_str(), selected == i)) {
+						selected = i;
+					}
+					if (selected == i) {
+						ImGui::SetItemDefaultFocus();
+					}
+					i++;
+				}
+				ImGui::EndChild();
+				ImGui::SameLine();
+
+				// Right Details
+				TrainingPackDBMetaData pack = searchState.packs[selected];
+				ImGui::BeginGroup();
+
+				if (ImGui::Button("Download##BySearch")) {
+					// TODO: Why isn't this being called? Is it because there are two buttons with the text "Download"?? Yes, find way around this (can we assign IDs?). Also, refresh packs for selection after download.
+					cvarManager->log("Downloading pack with code: " + pack.code);
+					DownloadPack(pack.code);
+				}
+				if (pack.code != "") {
+					ImGui::SameLine();
+					if (ImGui::Button("Load Custom Training Pack")) {
+						cvarManager->executeCommand("sleep 1; load_training " + string(pack.code));
+					}
+				}
+
+				ImGui::BeginChild("Training Pack Details", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below us
+
+				ImGui::Text(pack.description.c_str());
+				ImGui::Separator();
+				ImGui::Text("Creator: %s", pack.creator.c_str());
+				ImGui::Text("Offensive Players: %d", pack.offense);
+				ImGui::Text("Defensive Players: %d", pack.defense);
+				ImGui::Text("Drills: %d", pack.num_drills);
+				ImGui::Text("Code: %s", pack.code.c_str());
+
+				ImGui::EndChild();
 
 				ImGui::SameLine();
 				ImGui::EndGroup();
@@ -344,7 +429,9 @@ void TeamTrainingPlugin::Render()
 		
 		int whatsNewFlags = (cvarManager->getCvar(CVAR_PREFIX + "last_version_loaded").getStringValue().compare(PLUGIN_VERSION) != 0) ? ImGuiTabItemFlags_SetSelected : 0;
 		if (ImGui::BeginTabItem("What's new", NULL, whatsNewFlags)) {
-			cvarManager->executeCommand(CVAR_PREFIX + "last_version_loaded " + PLUGIN_VERSION + "; writeconfig");
+			if (whatsNewFlags & ImGuiTabItemFlags_SetSelected) {
+				cvarManager->executeCommand(CVAR_PREFIX + "last_version_loaded " + PLUGIN_VERSION + "; writeconfig");
+			}
 
 			ImGui::TextWrapped("v0.2.8 (Dec 7 2020)");
 			ImGui::TextWrapped("Changelog:");
@@ -418,4 +505,81 @@ void TeamTrainingPlugin::OnClose()
 {
 	this->isWindowOpen = false;
 	packs.clear();
+}
+
+void TeamTrainingPlugin::RunPackSearch()
+{
+	stringstream query;
+	query << "/api/rocket-league/teamtraining/search?type=packs";
+	if (searchState.offense > 0) {
+		query << "&offense=" << searchState.offense;
+	}
+	if (searchState.defense > 0) {
+		query << "&defense=" << searchState.defense;
+	}
+
+	searchState.packs.clear();
+
+	httplib::Client cli(SERVER_URL);
+	if (auto res = cli.Get(query.str().c_str())) {
+		if (res->status == 200) {
+			json js;
+			try {
+				js = json::parse(res->body);
+			}
+			catch (...) {
+				cvarManager->log(res->body);
+				searchState.error = "Error parsing response from server";
+				return;
+			}
+
+			for (json jsPack : js) {
+				TrainingPackDBMetaData pack;
+				pack.code = jsPack["code"].get<string>();
+				pack.description = jsPack["description"].get<string>();
+				pack.creator = jsPack["creator"].get<string>();
+				pack.offense = jsPack["offense"].get<int>();
+				pack.defense = jsPack["defense"].get<int>();
+				pack.num_drills = jsPack["num_drills"].get<int>();
+				pack.downloads = jsPack["downloads"].get<int>();
+				searchState.packs.push_back(pack);
+			}
+		}
+		else {
+			cvarManager->log(res->body);
+			searchState.error = res->body;
+		}
+	}
+	else {
+		cvarManager->log("Failed to reach host");
+		searchState.error = "Failed to reach host";
+	}
+}
+
+void TeamTrainingPlugin::DownloadPack(string code)
+{
+	fs::path fpath = getPackDataPath(code);
+
+	if (fs::exists(fpath)) {
+		// TODO: Set error message
+		return;
+	}
+
+	cvarManager->log("Downloading pack to: " + fpath.string());
+
+	httplib::Client cli(SERVER_URL);
+
+	stringstream url;
+	url << "/api/rocket-league/teamtraining/download?code=" << code;
+
+	ofstream outfile(fpath);
+
+	auto res = cli.Get(url.str().c_str(),
+		[&](const char* data, size_t data_length) {
+			outfile << string(data, data_length);
+			cvarManager->log(string(data, data_length));
+			return true;
+		});
+
+	outfile.close();
 }

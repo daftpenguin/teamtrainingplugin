@@ -1,5 +1,11 @@
 #pragma comment(lib, "pluginsdk.lib")
 
+#define WIN32_LEAN_AND_MEAN
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+
+#include "cpp-httplib/httplib.h"
+#include <Windows.h>
+
 #include <fstream>
 
 #include "bakkesmod/plugin/bakkesmodplugin.h"
@@ -12,8 +18,17 @@
 using namespace std;
 
 constexpr auto PLUGIN_VERSION = "0.2.8";
+constexpr auto SERVER_URL = "http://localhost:8000";
 
 const std::string CVAR_PREFIX("cl_team_training_");
+
+struct PackSearchState {
+	string error;
+	char code[20];
+	int offense;
+	int defense;
+	vector<TrainingPackDBMetaData> packs;
+};
 
 class TeamTrainingPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginWindow
 {
@@ -51,7 +66,7 @@ private:
 	void resetShot();
 	void setPlayerToCar(TrainingPackPlayer player, CarWrapper car);
 	bool validatePlayers(ArrayWrapper<CarWrapper> cars);
-	std::map<std::string, TrainingPack> getTrainingPacks();
+	std::vector<TrainingPack> getTrainingPacks();
 
 	std::vector<unsigned int> player_order;
 	std::shared_ptr<TrainingPack> pack;
@@ -93,8 +108,9 @@ private:
 	};
 	std::string packDataPath = "";
 	// Selection
-	std::map<std::string, TrainingPack> packs;
-	std::vector<std::string> pack_keys;
+	std::vector<TrainingPack> packs;
+	// Downloads
+	PackSearchState searchState;
 	// Creation
 	int offensive_players = 0;
 	int defensive_players = 0;
@@ -119,5 +135,8 @@ public:
 private:
 	static constexpr char CFG_FILE[] = "team_training.cfg";
 	static constexpr char RESET_CFG_FILE[] = "default_training.cfg";
+
+	void RunPackSearch();
+	void DownloadPack(std::string code);
 };
 

@@ -1,24 +1,3 @@
-// TODO: Defense only drills?
-// TODO: Allow using packs without having enough players, with adjustable roles?
-// TODO: Make spectators actually spectators, or a way for them to become spectators?
-// TODO: Freeze players during countdown. Non-host players never unfrozen. Replicate data to clients?
-// TODO: Allow users to upload packs (require codes?)
-// TODO: Why are cvars not being saved to config?
-// TODO: Add HUD?
-// TODO: Generate shots from replays into packs
-// TODO: SpectatorShortcut for a consistent ordering of players? Or just use player IDs?
-// TODO: Add randomize and cycle buttons role assignments in UI
-// TODO: Using quick settings clears bindings. Anything we can do about this?
-// TODO: Investigate retrieving angular velocity from training packs (why is there no angular velocity when we set the spin in BM even when we wait for the ball to start moving?)
-// TODO: Clarify the number of drills in GUI, and add some protections against crashes from misusage.
-// TODO: Can we allow users to edit the training packs in freeplay?
-// TODO: Can we "guess" a passer and ball's starting positions from a pack that hasn't been designed for team training?
-// TODO: Remove the internal convert command and call gameWrapper->Execute("") from the GUI button instead.
-// TODO: Fix player order. There's probably issues when some players leave/join.
-// TODO: Disable auto shuffle in custom training when creating training pack.
-// TODO: Car variance?
-// TODO: Third player can't pickup boost sometimes. Resetting shot with regular reset shot binding works, but not with the dpad binding.
-
 #define _USE_MATH_DEFINES
 
 #include "TeamTrainingPlugin.h"
@@ -113,6 +92,19 @@ void TeamTrainingPlugin::onLoad()
 
 	gameWrapper->LoadToastTexture("teamtraining1", gameWrapper->GetDataFolder() / "assets" / "teamtraining_logo.png");
 
+	cvarManager->registerNotifier("team_train_test", [&, &_cvarManager = cvarManager](vector<string> params) {
+		cvarManager->log("Running test");
+		httplib::Client cli(SERVER_URL);
+		if (auto res = cli.Get("/api/rocket-league/teamtraining/search?type=packs")) {
+			if (res->status == 200) {
+				cvarManager->log(res->body);
+			}
+			else {
+				cvarManager->log(res->body);
+			}
+		}
+
+		}, "test command for dev", PERMISSION_ALL);
 
 	/*gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
 		"Function TAGame.GameEvent_TA.AddCar",
@@ -458,7 +450,7 @@ void TeamTrainingPlugin::listPacks(std::vector<std::string> params)
 	if (packs.size() > 0) {
 		cvarManager->log("Available team training packs:");
 		for (auto const& pack : packs) {
-			cvarManager->log(pack.first);
+			cvarManager->log(pack.filepath);
 		}
 	}
 	else {
@@ -777,8 +769,8 @@ static inline bool dir_exists(const char *dirpath)
 	return (ftyp != INVALID_FILE_ATTRIBUTES && ftyp & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-std::map<std::string, TrainingPack> TeamTrainingPlugin::getTrainingPacks() {
-	std::map<std::string, TrainingPack> packs;
+std::vector<TrainingPack> TeamTrainingPlugin::getTrainingPacks() {
+	std::vector<TrainingPack> packs;
 
 	fs::path dataPath = getPackDataPath("");
 	if (!fs::exists(dataPath)) {
@@ -787,7 +779,8 @@ std::map<std::string, TrainingPack> TeamTrainingPlugin::getTrainingPacks() {
 
 	for (const auto & entry : fs::directory_iterator(dataPath)) {
 		if (entry.path().has_extension() && entry.path().extension() == ".json") {
-			packs.emplace(entry.path().filename().string(), TrainingPack(entry.path().string()));
+			packs.push_back(TrainingPack(entry.path().string()));
+			//packs.emplace(entry.path().filename().string(), TrainingPack(entry.path().string()));
 		}
 	}
 

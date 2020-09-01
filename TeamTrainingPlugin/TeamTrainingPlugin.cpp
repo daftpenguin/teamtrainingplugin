@@ -19,7 +19,7 @@ using namespace std;
 
 #pragma comment (lib, "Ws2_32.lib")
 
-BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", PLUGIN_VERSION, PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING)
+BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", PLUGIN_VERSION, PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING | PLUGINTYPE_THREADED)
 
 mt19937 gen(chrono::system_clock::now().time_since_epoch().count());
 uniform_real_distribution<float> dist(0.0, 1.0);
@@ -780,7 +780,6 @@ std::vector<TrainingPack> TeamTrainingPlugin::getTrainingPacks() {
 	for (const auto & entry : fs::directory_iterator(dataPath)) {
 		if (entry.path().has_extension() && entry.path().extension() == ".json") {
 			packs.push_back(TrainingPack(entry.path().string()));
-			//packs.emplace(entry.path().filename().string(), TrainingPack(entry.path().string()));
 		}
 	}
 

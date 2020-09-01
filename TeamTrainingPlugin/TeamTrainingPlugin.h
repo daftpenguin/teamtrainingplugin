@@ -15,6 +15,9 @@
 
 #include "TrainingPack.h"
 
+#include <boost/thread/mutex.hpp>
+#include <boost/noncopyable.hpp>
+
 using namespace std;
 
 constexpr auto PLUGIN_VERSION = "0.2.8";
@@ -22,12 +25,90 @@ constexpr auto SERVER_URL = "http://localhost:8000";
 
 const std::string CVAR_PREFIX("cl_team_training_");
 
-struct PackSearchState {
-	string error;
+class SearchState : private boost::noncopyable
+{
+public:
+	SearchState() : is_searching(false), failed(false), error(""), mutex() {};
+
+	void newSearch() {
+		resetState();
+		is_searching = true;
+	}
+
+	void resetState() {
+		is_searching = false;
+		failed = false;
+		error = "";
+	}
+
+	string descriptionQuery;
 	char code[20];
 	int offense;
 	int defense;
 	vector<TrainingPackDBMetaData> packs;
+
+	bool is_searching;
+	bool failed;
+	string error;
+	boost::mutex mutex;
+};
+
+class DownloadState : private boost::noncopyable
+{
+public:
+	DownloadState() : is_downloading(false), failed(false), cancelled(false), progress(0), error(""), pack_code(""), mutex() {};
+
+	void newPack(string code) {
+		resetState();
+		pack_code = code;
+		is_downloading = true;
+	}
+
+	void resetState() {
+		is_downloading = false;
+		failed = false;
+		cancelled = false;
+		progress = 0;
+		error = "";
+	}
+
+	bool is_downloading;
+	bool failed;
+	bool cancelled;
+	float progress;
+	string error;
+	string pack_code;
+	boost::mutex mutex;
+};
+
+class UploadState : private boost::noncopyable
+{
+public:
+	UploadState() : is_uploading(false), failed(false), cancelled(false), progress(0), error(""), pack_path(""), pack_code(""), mutex() {};
+	
+	void newPack(TrainingPack pack) {
+		resetState();
+		pack_path = pack.filepath;
+		pack_code = pack.code;
+		is_uploading = true;
+	};
+
+	void resetState() {
+		is_uploading = false;
+		failed = false;
+		cancelled = false;
+		progress = 0;
+		error = "";
+	}
+
+	bool is_uploading;
+	bool failed;
+	bool cancelled;
+	float progress;
+	string error;
+	string pack_path;
+	string pack_code;
+	boost::mutex mutex;
 };
 
 class TeamTrainingPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginWindow
@@ -110,7 +191,7 @@ private:
 	// Selection
 	std::vector<TrainingPack> packs;
 	// Downloads
-	PackSearchState searchState;
+	SearchState searchState;
 	// Creation
 	int offensive_players = 0;
 	int defensive_players = 0;
@@ -136,7 +217,14 @@ private:
 	static constexpr char CFG_FILE[] = "team_training.cfg";
 	static constexpr char RESET_CFG_FILE[] = "default_training.cfg";
 
-	void RunPackSearch();
+	void searchPacksThread();
+	void SearchPacks();
+	void downloadPackThread();
 	void DownloadPack(std::string code);
+	void uploadPackThread();
+	void UploadPack(const TrainingPack& pack);
+
+	DownloadState downloadState;
+	UploadState uploadState;
 };
 

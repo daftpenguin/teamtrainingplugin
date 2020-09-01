@@ -1,7 +1,19 @@
 #include "TeamTrainingPlugin.h"
 
+#include "imgui/imgui_custom_widgets.h"
+
+#include <algorithm>
 #include <sstream>
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/thread.hpp>
+#include <boost/thread/mutex.hpp>
+
+// TODO: Prevent users from uploading too frequently (in server code, not here) - by IP, by steamID, by 
+// TODO: Block uploads containing censored words (catch here, but also apply in server code)
+// TODO: Add commenting and ratings
+// TODO: Add tips/notes from multiple users
+// TODO: Allow reporting of packs, comments, tips, etc
+// TODO: 
 
 using namespace std;
 
@@ -72,7 +84,7 @@ void TeamTrainingPlugin::Render()
 					if (pack.errorMsg != "") {
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
 					}
-					if (ImGui::Selectable(pack.description.c_str(), selected == i)) {
+					if (ImGui::Selectable((pack.description + "##Selection" + to_string(i)).c_str(), selected == i)) {
 						selected = i;
 					}
 					if (pack.errorMsg != "") {
@@ -128,6 +140,88 @@ void TeamTrainingPlugin::Render()
 					ImGui::Text("Code: %s", pack.code.c_str());
 					ImGui::Text("Filepath: %s", pack.filepath.c_str());
 
+					ImGui::Separator();
+
+					if (ImGui::Button("Upload")) {
+						UploadPack(pack);
+					}
+
+					if (uploadState.is_uploading) {
+						ImGui::OpenPopup("Uploading");
+						if (ImGui::BeginPopupModal("Uploading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+							ImGui::Text(("Uploading: " + uploadState.pack_code).c_str());
+							ImGui::ProgressBar(uploadState.progress);
+
+							if (uploadState.error != "") {
+								ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+								ImGui::TextWrapped(uploadState.error.c_str());
+								ImGui::PopStyleColor();
+							}
+
+							bool showOk = uploadState.progress >= 1;
+							bool showRetry = uploadState.failed;							
+							if (showOk) {
+								if (ImGui::Button("Ok", ImVec2(120, 0))) {
+									uploadState.is_uploading = false;
+								}
+								ImGui::SameLine();
+							}
+							else if (showRetry) {
+								if (ImGui::Button("Retry", ImVec2(120, 0))) {
+									uploadState.resetState();
+									boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
+								}
+								ImGui::SameLine();
+							}
+							else {
+								ImGui::Indent(120);
+							}
+
+							if (!showOk) {
+								if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+									uploadState.cancelled = true;
+									uploadState.is_uploading = false;
+									ImGui::CloseCurrentPopup();
+								}
+							}
+							ImGui::EndPopup();
+
+							ImGui::CloseCurrentPopup();
+						}
+					}
+
+					if (downloadState.is_downloading) {
+						ImGui::OpenPopup("Downloading");
+						if (ImGui::BeginPopupModal("Downloading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+							ImGui::Text(("Downloading: " + downloadState.pack_code).c_str());
+							ImGui::ProgressBar(downloadState.progress);
+
+							if (downloadState.error != "") {
+								ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+								ImGui::TextWrapped(downloadState.error.c_str());
+								ImGui::PopStyleColor();
+							}
+
+							bool showOk = downloadState.progress >= 1;
+							bool showRetry = downloadState.failed;
+							if (showOk) {
+								if (ImGui::Button("Ok", ImVec2(120, 0))) {
+									downloadState.is_downloading = false;
+								}
+								ImGui::SameLine();
+							}
+							else if (showRetry) {
+								if (ImGui::Button("Retry", ImVec2(120, 0))) {
+									downloadState.resetState();
+									boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this };
+								}
+							}
+							else {
+								ImGui::Indent(120);
+							}
+						}
+					}
+
 					ImGui::EndChild();
 				}
 				else {
@@ -166,7 +260,6 @@ void TeamTrainingPlugin::Render()
 			// TODO: How to determine which packs were downloaded vs created? How to determine which packs can be uploaded?
 			// TODO: Track uploader from creator (we're going to upload packs we don't own).
 			// TODO: Notes and other data should be updateable by both creator and uploader?
-			// TODO: Put training pack code in filename on server with timestamp.
 			// TODO: Allow comments and rating?
 
 			ImGui::TextWrapped("Search drills with filter options");
@@ -178,14 +271,24 @@ void TeamTrainingPlugin::Render()
 			}
 
 			if (ImGui::Button("Search")) {
-				// TODO: RunPackSearch should set errors and we need to add display for it
-				RunPackSearch();
+				SearchPacks();
 			}
 
 			ImGui::Separator();
 
-			if (searchState.packs.size() == 0) {
-
+			if (searchState.is_searching) {
+				//ImGui::GetWindowWidth() - 15;
+				ImGui::SetCursorPos((ImGui::GetWindowSize() - ImVec2(30, 30)) * 0.5f);
+				ImGui::Spinner("Searching...", 30, 5);
+			}
+			else if (searchState.failed) {
+				ImGui::TextWrapped("Last search failed");
+				if (searchState.error != "") {
+					ImGui::TextWrapped(searchState.error.c_str());
+				}
+			}
+			else if (searchState.packs.size() == 0) {
+				ImGui::TextWrapped("No packs found");
 			}
 			else {
 				// Left Selection
@@ -193,7 +296,7 @@ void TeamTrainingPlugin::Render()
 				ImGui::BeginChild("left pane", ImVec2(150, 0), true);
 				int i = 0;
 				for (auto pack : searchState.packs) {
-					if (ImGui::Selectable(pack.description.c_str(), selected == i)) {
+					if (ImGui::Selectable((pack.description + "##" + to_string(i)).c_str(), selected == i)) {
 						selected = i;
 					}
 					if (selected == i) {
@@ -209,7 +312,7 @@ void TeamTrainingPlugin::Render()
 				ImGui::BeginGroup();
 
 				if (ImGui::Button("Download##BySearch")) {
-					// TODO: Why isn't this being called? Is it because there are two buttons with the text "Download"?? Yes, find way around this (can we assign IDs?). Also, refresh packs for selection after download.
+					// TODO: Refresh packs for selection after download.
 					cvarManager->log("Downloading pack with code: " + pack.code);
 					DownloadPack(pack.code);
 				}
@@ -266,7 +369,7 @@ void TeamTrainingPlugin::Render()
 				ImGuiDragDropFlags tgt_drag_flags = 0;// | ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
 
 				for (int i = 0; i < player_order.size(); i++) {
-					ImGui::Button(cars.Get(player_order[i]).GetPRI().GetPlayerName().ToString().c_str());
+					ImGui::Button((cars.Get(player_order[i]).GetPRI().GetPlayerName().ToString()).c_str());
 
 					if (ImGui::BeginDragDropSource(src_drag_flags)) {
 						ImGui::SetDragDropPayload("PLAYER_ROLE_POSITION", &i, sizeof(int), ImGuiCond_Once);
@@ -413,7 +516,7 @@ void TeamTrainingPlugin::Render()
 			ImGui::InputText("Countdown after reset (in seconds)", countdown, IM_ARRAYSIZE(countdown), ImGuiInputTextFlags_CharsScientific);
 
 			if (ImGui::Button("Save")) {
-				cvarManager->executeCommand(CVAR_PREFIX + "countdown " + countdown);
+				cvarManager->getCvar(CVAR_PREFIX + "countdown").setValue(countdown);
 			}
 
 			ImGui::Separator();
@@ -430,7 +533,7 @@ void TeamTrainingPlugin::Render()
 		int whatsNewFlags = (cvarManager->getCvar(CVAR_PREFIX + "last_version_loaded").getStringValue().compare(PLUGIN_VERSION) != 0) ? ImGuiTabItemFlags_SetSelected : 0;
 		if (ImGui::BeginTabItem("What's new", NULL, whatsNewFlags)) {
 			if (whatsNewFlags & ImGuiTabItemFlags_SetSelected) {
-				cvarManager->executeCommand(CVAR_PREFIX + "last_version_loaded " + PLUGIN_VERSION + "; writeconfig");
+				cvarManager->getCvar(CVAR_PREFIX + "last_version_loaded").setValue(PLUGIN_VERSION);
 			}
 
 			ImGui::TextWrapped("v0.2.8 (Dec 7 2020)");
@@ -507,8 +610,10 @@ void TeamTrainingPlugin::OnClose()
 	packs.clear();
 }
 
-void TeamTrainingPlugin::RunPackSearch()
+void TeamTrainingPlugin::searchPacksThread()
 {
+	searchState.is_searching = true;
+
 	stringstream query;
 	query << "/api/rocket-league/teamtraining/search?type=packs";
 	if (searchState.offense > 0) {
@@ -517,8 +622,6 @@ void TeamTrainingPlugin::RunPackSearch()
 	if (searchState.defense > 0) {
 		query << "&defense=" << searchState.defense;
 	}
-
-	searchState.packs.clear();
 
 	httplib::Client cli(SERVER_URL);
 	if (auto res = cli.Get(query.str().c_str())) {
@@ -544,19 +647,37 @@ void TeamTrainingPlugin::RunPackSearch()
 				pack.downloads = jsPack["downloads"].get<int>();
 				searchState.packs.push_back(pack);
 			}
+
+			// TODO: Remove fake work
+			for (int i = 0; i < 6; i++) {
+				boost::this_thread::sleep_for(boost::chrono::seconds(1));
+			}
+
+			searchState.is_searching = false;
 		}
 		else {
 			cvarManager->log(res->body);
+			searchState.is_searching = false;
+			searchState.failed = true;
 			searchState.error = res->body;
 		}
 	}
 	else {
 		cvarManager->log("Failed to reach host");
+		searchState.is_searching = false;
+		searchState.failed = true;
 		searchState.error = "Failed to reach host";
 	}
 }
 
-void TeamTrainingPlugin::DownloadPack(string code)
+void TeamTrainingPlugin::SearchPacks()
+{
+	searchState.newSearch();
+	searchState.packs.clear();
+	boost::thread t{ &TeamTrainingPlugin::searchPacksThread, this };
+}
+
+void TeamTrainingPlugin::downloadPackThread()
 {
 	fs::path fpath = getPackDataPath(code);
 
@@ -570,7 +691,7 @@ void TeamTrainingPlugin::DownloadPack(string code)
 	httplib::Client cli(SERVER_URL);
 
 	stringstream url;
-	url << "/api/rocket-league/teamtraining/download?code=" << code;
+	url << "/api/rocket-league/teamtraining/download?code=" << downloadState.pack_code;
 
 	ofstream outfile(fpath);
 
@@ -578,8 +699,63 @@ void TeamTrainingPlugin::DownloadPack(string code)
 		[&](const char* data, size_t data_length) {
 			outfile << string(data, data_length);
 			cvarManager->log(string(data, data_length));
-			return true;
+			return downloadState.cancelled == false;
+		},
+		[&](uint64_t len, uint64_t total) {
+			downloadState.progress = len / total;
+			return downloadState.cancelled == false;
 		});
 
 	outfile.close();
+}
+
+void TeamTrainingPlugin::DownloadPack(string code)
+{
+	downloadState.newPack(code);
+	boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this };
+	packs.clear(); // so we reload the packs next time selection tab is loaded
+}
+
+void TeamTrainingPlugin::uploadPackThread()
+{
+	httplib::Client cli(SERVER_URL);
+
+	ifstream fin(uploadState.pack_path.c_str());
+	std::stringstream buffer;
+	buffer << fin.rdbuf();
+
+	string data = buffer.str();
+
+	httplib::MultipartFormDataItems items = {
+		{ "file", buffer.str(), uploadState.pack_code + ".json", "application/json" }
+	};
+
+	auto res = cli.Post("/api/rocket-league/teamtraining/upload", items);
+	// TODO: Remove fake work
+	for (int i = 0; i < 5; i++) {
+		boost::this_thread::sleep_for(boost::chrono::seconds(1));
+		uploadState.progress = uploadState.progress + 0.15;
+	}
+	if (res) {
+		if (res->status == 200) {
+			cvarManager->log("Upload successful");
+			uploadState.progress = 1;
+		}
+		else {
+			uploadState.failed = true;
+			cvarManager->log(res->body);
+			uploadState.error = res->body;
+		}
+	}
+	else {
+		uploadState.failed = true;
+		cvarManager->log("Upload failed. Could not reach server.");
+		uploadState.error = "Upload failed. Could not reach server.";
+	}
+}
+
+void TeamTrainingPlugin::UploadPack(const TrainingPack &pack)
+{
+	uploadState.newPack(pack);
+	boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
 }

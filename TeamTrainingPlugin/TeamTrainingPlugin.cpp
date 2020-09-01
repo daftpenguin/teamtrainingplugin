@@ -241,8 +241,21 @@ void TeamTrainingPlugin::setShot(int shot)
 		return;
 	}
 
+	// Make sure we can get ball and cars first
+	cvarManager->log("Checking cars and ball exist");
+	BallWrapper ball = server.GetBall();
+	if (ball.IsNull()) {
+		cvarManager->log("Ball is null, cannot setup shot");
+		return;
+	}
+	ArrayWrapper<CarWrapper> cars = server.GetCars();
+	if (cars.IsNull()) {
+		cvarManager->log("Cars array is null, cannot continue to set shot");
+		return;
+	}
+
 	cvarManager->log("Validating players");
-	if (!validatePlayers(server)) {
+	if (!validatePlayers(cars)) {
 		return;
 	}
 
@@ -262,21 +275,6 @@ void TeamTrainingPlugin::setShot(int shot)
 	TrainingPackDrill drill = pack->drills[shot];
 	if (cvarManager->getCvar("sv_training_enabled").getBoolValue()) {
 		drill = createDrillVariant(drill);
-	}
-
-	// Make sure we can get ball and all cars first
-	cvarManager->log("Checking cars and ball exist");
-	BallWrapper ball = server.GetBall();
-	if (ball.IsNull()) {
-		cvarManager->log("Ball is null, cannot setup shot");
-		return;
-	}
-	ArrayWrapper<CarWrapper> cars = server.GetCars();
-	for (int i = 0; i < cars.Count(); i++) {
-		if (cars.Get(i).IsNull()) {
-			cvarManager->log("Car " + to_string(i) + " is null, cannot setup shot");
-			return;
-		}
 	}
 
 	// Stop all cars and ball

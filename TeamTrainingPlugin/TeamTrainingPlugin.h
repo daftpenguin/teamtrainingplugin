@@ -1,4 +1,4 @@
-#pragma comment(lib, "BakkesMod.lib")
+#pragma comment(lib, "pluginsdk.lib")
 
 #include <fstream>
 

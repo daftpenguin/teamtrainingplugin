@@ -46,6 +46,10 @@ Set `cl_team_training` to 1 to randomize the shots in the training pack, and `cl
 
 # Changelog
 
+v0.2.6
+* Updated link from old bakkesmod.lib to new pluginsdk.lib
+* Added a few more null checks that may fix potential crashes
+
 v0.2.5
 * Added what's new tab to share new changes when launching after plugin was updated
 * Added support for drill shuffling and variance in drills using BakkesMod's built-in custom training options

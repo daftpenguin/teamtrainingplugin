@@ -343,12 +343,10 @@ void TeamTrainingPlugin::Render()
 		if (ImGui::BeginTabItem("What's new", NULL, whatsNewFlags)) {
 			cvarManager->executeCommand(CVAR_PREFIX + "last_version_loaded " + PLUGIN_VERSION + "; writeconfig");
 
-			ImGui::TextWrapped("Last update: v0.2.5 (Aug 18 2020)");
+			ImGui::TextWrapped("Last update: v0.2.6 (Sep 1 2020)");
 			ImGui::TextWrapped("Changelog:");
-			ImGui::BulletText("Added what's new tab to share new changes when launching after plugin was updated");
+			ImGui::BulletText("Updated link from old bakkesmod.lib to new pluginsdk.lib");
 			ImGui::BulletText("Added support for drill shuffling and variance in drills using BakkesMod's built-in custom training options");
-			ImGui::BulletText("Fixed game crashing due to an incomplete install where training packs folder is missing");
-			ImGui::BulletText("Fixed game crashes caused by missing null checks");
 
 			ImGui::Separator();
 

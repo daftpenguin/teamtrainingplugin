@@ -50,7 +50,7 @@ private:
 	void setShot(int shot);
 	void resetShot();
 	void setPlayerToCar(TrainingPackPlayer player, CarWrapper car);
-	bool validatePlayers(ServerWrapper tutorial);
+	bool validatePlayers(ArrayWrapper<CarWrapper> cars);
 	std::map<std::string, TrainingPack> getTrainingPacks();
 
 	std::vector<unsigned int> player_order;

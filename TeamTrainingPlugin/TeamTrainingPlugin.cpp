@@ -196,7 +196,13 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 		std::random_shuffle(pack->drills.begin(), pack->drills.end());
 	}
 
-	if (!validatePlayers(server)) {
+	auto cars = server.GetCars();
+	if (cars.IsNull()) {
+		cvarManager->log("Failed to get cars from server");
+		return;
+	}
+
+	if (!validatePlayers(cars)) {
 		return;
 	}
 
@@ -530,10 +536,10 @@ void TeamTrainingPlugin::setPlayerToCar(TrainingPackPlayer player, CarWrapper ca
 	car.SetRotation(player.rotation);
 }
 
-bool TeamTrainingPlugin::validatePlayers(ServerWrapper server)
+bool TeamTrainingPlugin::validatePlayers(ArrayWrapper<CarWrapper> cars)
 {
 	// Validate the number of players
-	int num_players = server.GetCars().Count();
+	int num_players = cars.Count();
 	if (num_players < pack->offense) {
 		cvarManager->log("Pack requires at least " + std::to_string(pack->offense) + " players but there are only " + \
 			std::to_string(num_players));

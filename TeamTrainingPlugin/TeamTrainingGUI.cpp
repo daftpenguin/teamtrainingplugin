@@ -247,10 +247,10 @@ void TeamTrainingPlugin::Render()
 			// Allow code to be used to download pack
 
 			ImGui::TextWrapped("Download by code:");
-			ImGui::InputText("", searchState.code, IM_ARRAYSIZE(searchState.code));
+			ImGui::InputText("", searchState.filters.code, IM_ARRAYSIZE(searchState.filters.code));
 			
 			if (ImGui::Button("Download##ByCode")) {
-				DownloadPack(searchState.code);
+				DownloadPack(searchState.filters.code);
 			}
 
 			ImGui::Separator();
@@ -260,19 +260,9 @@ void TeamTrainingPlugin::Render()
 			// TODO: How to determine which packs were downloaded vs created? How to determine which packs can be uploaded?
 			// TODO: Track uploader from creator (we're going to upload packs we don't own).
 			// TODO: Notes and other data should be updateable by both creator and uploader?
-			// TODO: Allow comments and rating?
+			// TODO: Allow comments and rating
 
-			ImGui::TextWrapped("Search drills with filter options");
-			if (ImGui::InputInt("Offensive players", &searchState.offense, ImGuiInputTextFlags_CharsDecimal)) {
-				searchState.offense = (searchState.offense < 0) ? 0 : searchState.offense;
-			}
-			if (ImGui::InputInt("Defensive players", &searchState.defense, ImGuiInputTextFlags_CharsDecimal)) {
-				searchState.defense = (searchState.defense < 0) ? 0 : searchState.defense;
-			}
-
-			if (ImGui::Button("Search")) {
-				SearchPacks();
-			}
+			AddSearchFilters(searchState.filters, "Downloads");
 
 			ImGui::Separator();
 
@@ -610,17 +600,17 @@ void TeamTrainingPlugin::OnClose()
 	packs.clear();
 }
 
-void TeamTrainingPlugin::searchPacksThread()
+void TeamTrainingPlugin::searchPacksThread(SearchFilterState& filters)
 {
 	searchState.is_searching = true;
 
 	stringstream query;
 	query << "/api/rocket-league/teamtraining/search?type=packs";
-	if (searchState.offense > 0) {
-		query << "&offense=" << searchState.offense;
+	if (filters.offense > 0) {
+		query << "&offense=" << filters.offense;
 	}
-	if (searchState.defense > 0) {
-		query << "&defense=" << searchState.defense;
+	if (filters.defense > 0) {
+		query << "&defense=" << filters.defense;
 	}
 
 	httplib::Client cli(SERVER_URL);
@@ -670,7 +660,7 @@ void TeamTrainingPlugin::searchPacksThread()
 	}
 }
 
-void TeamTrainingPlugin::SearchPacks()
+void TeamTrainingPlugin::SearchPacks(SearchFilterState& filters)
 {
 	searchState.newSearch();
 	searchState.packs.clear();
@@ -758,4 +748,19 @@ void TeamTrainingPlugin::UploadPack(const TrainingPack &pack)
 {
 	uploadState.newPack(pack);
 	boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
+}
+
+void TeamTrainingPlugin::AddSearchFilters(SearchFilterState& filterState, string idPrefix, void (*searchCallback)(SearchFilterState& filterState))
+{
+	ImGui::TextWrapped("Search drills with filter options");
+	if (ImGui::InputInt(("Offensive players##" + idPrefix + "Offense").c_str(), &filterState.offense, ImGuiInputTextFlags_CharsDecimal)) {
+		filterState.offense = (filterState.offense < 0) ? 0 : filterState.offense;
+	}
+	if (ImGui::InputInt(("Defensive players" + idPrefix + "Defense").c_str(), &filterState.defense, ImGuiInputTextFlags_CharsDecimal)) {
+		filterState.defense = (filterState.defense < 0) ? 0 : filterState.defense;
+	}
+
+	if (ImGui::Button("Search")) {
+		searchCallback(filterState);
+	}
 }

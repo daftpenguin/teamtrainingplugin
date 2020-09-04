@@ -25,6 +25,16 @@ constexpr auto SERVER_URL = "http://localhost:8000";
 
 const std::string CVAR_PREFIX("cl_team_training_");
 
+class SearchFilterState : private boost::noncopyable {
+public:
+	SearchFilterState() : descriptionQuery(""), code(""), offense(0), defense(0) {};
+
+	string descriptionQuery;
+	char code[20];
+	int offense;
+	int defense;
+};
+
 class SearchState : private boost::noncopyable
 {
 public:
@@ -41,10 +51,7 @@ public:
 		error = "";
 	}
 
-	string descriptionQuery;
-	char code[20];
-	int offense;
-	int defense;
+	SearchFilterState filters;
 	vector<TrainingPackDBMetaData> packs;
 
 	bool is_searching;
@@ -217,8 +224,9 @@ private:
 	static constexpr char CFG_FILE[] = "team_training.cfg";
 	static constexpr char RESET_CFG_FILE[] = "default_training.cfg";
 
-	void searchPacksThread();
-	void SearchPacks();
+	void AddSearchFilters(SearchFilterState& filterState, string idPrefix, void (*searchCallback)(SearchFilterState& filterState));
+	void searchPacksThread(SearchFilterState& filters);
+	void SearchPacks(SearchFilterState& filters);
 	void downloadPackThread();
 	void DownloadPack(std::string code);
 	void uploadPackThread();

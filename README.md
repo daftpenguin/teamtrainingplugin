@@ -46,6 +46,9 @@ Set `cl_team_training` to 1 to randomize the shots in the training pack, and `cl
 
 # Changelog
 
+v0.2.7
+* Fixed bug causing crashes when variance is enabled
+
 v0.2.6
 * Updated link from old bakkesmod.lib to new pluginsdk.lib
 * Added a few more null checks that may fix potential crashes

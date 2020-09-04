@@ -372,16 +372,18 @@ void TeamTrainingPlugin::setShot(int shot)
 
 TrainingPackDrill TeamTrainingPlugin::createDrillVariant(TrainingPackDrill drill)
 {
+	cvarManager->log("Passers: " + to_string(drill.passers.size()));
+
 	TrainingPackDrill new_drill;
 	new_drill.ball = addBallVariance(drill.ball);
 	new_drill.shooter = addCarVariance(drill.shooter);
 
 	for (int p = 0; p < drill.passers.size(); p++) {
-		new_drill.passers[p] = addCarVariance(drill.passers[p]);
+		new_drill.passers.push_back(addCarVariance(drill.passers[p]));
 	}
 
 	for (int p = 0; p < drill.defenders.size(); p++) {
-		new_drill.defenders[p] = addCarVariance(drill.defenders[p]);
+		new_drill.defenders.push_back(addCarVariance(drill.defenders[p]));
 	}
 
 	return new_drill;

@@ -11,7 +11,7 @@
 
 using namespace std;
 
-constexpr auto PLUGIN_VERSION = "0.2.5";
+constexpr auto PLUGIN_VERSION = "0.2.7";
 
 const std::string CVAR_PREFIX("cl_team_training_");
 

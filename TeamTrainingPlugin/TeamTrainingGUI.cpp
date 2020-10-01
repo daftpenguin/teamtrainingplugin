@@ -13,7 +13,6 @@
 // TODO: Add commenting and ratings
 // TODO: Add tips/notes from multiple users
 // TODO: Allow reporting of packs, comments, tips, etc
-// TODO: 
 
 using namespace std;
 
@@ -42,6 +41,8 @@ void TeamTrainingPlugin::Render()
 		ImGui::End();
 		return;
 	}
+
+	ShowLoadingModals();
 	
 	if (ImGui::BeginTabBar("Team Training", ImGuiTabBarFlags_None)) {
 		if (ImGui::BeginTabItem("Selection")) {
@@ -146,82 +147,6 @@ void TeamTrainingPlugin::Render()
 						UploadPack(pack);
 					}
 
-					if (uploadState.is_uploading) {
-						ImGui::OpenPopup("Uploading");
-						if (ImGui::BeginPopupModal("Uploading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-							ImGui::Text(("Uploading: " + uploadState.pack_code).c_str());
-							ImGui::ProgressBar(uploadState.progress);
-
-							if (uploadState.error != "") {
-								ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-								ImGui::TextWrapped(uploadState.error.c_str());
-								ImGui::PopStyleColor();
-							}
-
-							bool showOk = uploadState.progress >= 1;
-							bool showRetry = uploadState.failed;							
-							if (showOk) {
-								if (ImGui::Button("Ok", ImVec2(120, 0))) {
-									uploadState.is_uploading = false;
-								}
-								ImGui::SameLine();
-							}
-							else if (showRetry) {
-								if (ImGui::Button("Retry", ImVec2(120, 0))) {
-									uploadState.resetState();
-									boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
-								}
-								ImGui::SameLine();
-							}
-							else {
-								ImGui::Indent(120);
-							}
-
-							if (!showOk) {
-								if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-									uploadState.cancelled = true;
-									uploadState.is_uploading = false;
-									ImGui::CloseCurrentPopup();
-								}
-							}
-							ImGui::EndPopup();
-
-							ImGui::CloseCurrentPopup();
-						}
-					}
-
-					if (downloadState.is_downloading) {
-						ImGui::OpenPopup("Downloading");
-						if (ImGui::BeginPopupModal("Downloading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-							ImGui::Text(("Downloading: " + downloadState.pack_code).c_str());
-							ImGui::ProgressBar(downloadState.progress);
-
-							if (downloadState.error != "") {
-								ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-								ImGui::TextWrapped(downloadState.error.c_str());
-								ImGui::PopStyleColor();
-							}
-
-							bool showOk = downloadState.progress >= 1;
-							bool showRetry = downloadState.failed;
-							if (showOk) {
-								if (ImGui::Button("Ok", ImVec2(120, 0))) {
-									downloadState.is_downloading = false;
-								}
-								ImGui::SameLine();
-							}
-							else if (showRetry) {
-								if (ImGui::Button("Retry", ImVec2(120, 0))) {
-									downloadState.resetState();
-									boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this };
-								}
-							}
-							else {
-								ImGui::Indent(120);
-							}
-						}
-					}
-
 					ImGui::EndChild();
 				}
 				else {
@@ -243,18 +168,7 @@ void TeamTrainingPlugin::Render()
 		}
 
 		if (ImGui::BeginTabItem("Download Drills")) {
-			// Allow filtering on offense, defense, tags, drill name, creator
-			// Allow code to be used to download pack
-
-			ImGui::TextWrapped("Download by code:");
-			ImGui::InputText("", searchState.filters.code, IM_ARRAYSIZE(searchState.filters.code));
-			
-			if (ImGui::Button("Download##ByCode")) {
-				DownloadPack(searchState.filters.code);
-			}
-
-			ImGui::Separator();
-
+			// Allow filtering on offense, defense, tags, drill name, creator, code
 			// TODO: Specify 0 = none. Search on description. Search on creator.
 			// TODO: Sorting methods. Add notes section in metadata.
 			// TODO: How to determine which packs were downloaded vs created? How to determine which packs can be uploaded?
@@ -262,12 +176,11 @@ void TeamTrainingPlugin::Render()
 			// TODO: Notes and other data should be updateable by both creator and uploader?
 			// TODO: Allow comments and rating
 
-			AddSearchFilters(searchState.filters, "Downloads");
+			AddSearchFilters(searchState.filters, "Downloads", std::bind(&TeamTrainingPlugin::SearchPacks, this, std::placeholders::_1));
 
 			ImGui::Separator();
 
 			if (searchState.is_searching) {
-				//ImGui::GetWindowWidth() - 15;
 				ImGui::SetCursorPos((ImGui::GetWindowSize() - ImVec2(30, 30)) * 0.5f);
 				ImGui::Spinner("Searching...", 30, 5);
 			}
@@ -302,7 +215,6 @@ void TeamTrainingPlugin::Render()
 				ImGui::BeginGroup();
 
 				if (ImGui::Button("Download##BySearch")) {
-					// TODO: Refresh packs for selection after download.
 					cvarManager->log("Downloading pack with code: " + pack.code);
 					DownloadPack(pack.code);
 				}
@@ -664,7 +576,7 @@ void TeamTrainingPlugin::SearchPacks(SearchFilterState& filters)
 {
 	searchState.newSearch();
 	searchState.packs.clear();
-	boost::thread t{ &TeamTrainingPlugin::searchPacksThread, this };
+	boost::thread t{ &TeamTrainingPlugin::searchPacksThread, this, boost::ref(filters) };
 }
 
 void TeamTrainingPlugin::downloadPackThread()
@@ -692,7 +604,7 @@ void TeamTrainingPlugin::downloadPackThread()
 			return downloadState.cancelled == false;
 		},
 		[&](uint64_t len, uint64_t total) {
-			downloadState.progress = len / total;
+			downloadState.progress = (float) len / (float) total;
 			return downloadState.cancelled == false;
 		});
 
@@ -724,7 +636,7 @@ void TeamTrainingPlugin::uploadPackThread()
 	// TODO: Remove fake work
 	for (int i = 0; i < 5; i++) {
 		boost::this_thread::sleep_for(boost::chrono::seconds(1));
-		uploadState.progress = uploadState.progress + 0.15;
+		uploadState.progress = uploadState.progress + 0.15f;
 	}
 	if (res) {
 		if (res->status == 200) {
@@ -750,17 +662,97 @@ void TeamTrainingPlugin::UploadPack(const TrainingPack &pack)
 	boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
 }
 
-void TeamTrainingPlugin::AddSearchFilters(SearchFilterState& filterState, string idPrefix, void (*searchCallback)(SearchFilterState& filterState))
+void TeamTrainingPlugin::AddSearchFilters(SearchFilterState& filterState, string idPrefix, std::function<void(SearchFilterState& filters)> searchCallback)
 {
 	ImGui::TextWrapped("Search drills with filter options");
 	if (ImGui::InputInt(("Offensive players##" + idPrefix + "Offense").c_str(), &filterState.offense, ImGuiInputTextFlags_CharsDecimal)) {
 		filterState.offense = (filterState.offense < 0) ? 0 : filterState.offense;
 	}
-	if (ImGui::InputInt(("Defensive players" + idPrefix + "Defense").c_str(), &filterState.defense, ImGuiInputTextFlags_CharsDecimal)) {
+	if (ImGui::InputInt(("Defensive players##" + idPrefix + "Defense").c_str(), &filterState.defense, ImGuiInputTextFlags_CharsDecimal)) {
 		filterState.defense = (filterState.defense < 0) ? 0 : filterState.defense;
 	}
+	ImGui::InputText(("Training Pack Code##" + idPrefix + "Code").c_str(), searchState.filters.code, IM_ARRAYSIZE(searchState.filters.code));
 
-	if (ImGui::Button("Search")) {
+	if (ImGui::Button(("Search##" + idPrefix + "SearchButton").c_str())) {
 		searchCallback(filterState);
+	}
+}
+
+void TeamTrainingPlugin::ShowLoadingModals()
+{
+	if (uploadState.is_uploading) {
+		ImGui::OpenPopup("Uploading");
+		if (ImGui::BeginPopupModal("Uploading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+			ImGui::Text(("Uploading: " + uploadState.pack_code).c_str());
+			ImGui::ProgressBar(uploadState.progress);
+
+			if (uploadState.error != "") {
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+				ImGui::TextWrapped(uploadState.error.c_str());
+				ImGui::PopStyleColor();
+			}
+
+			bool showOk = uploadState.progress >= 1;
+			bool showRetry = uploadState.failed;
+			if (showOk) {
+				if (ImGui::Button("Ok", ImVec2(120, 0))) {
+					uploadState.is_uploading = false;
+				}
+				ImGui::SameLine();
+			}
+			else if (showRetry) {
+				if (ImGui::Button("Retry", ImVec2(120, 0))) {
+					uploadState.resetState();
+					boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
+				}
+				ImGui::SameLine();
+			}
+			else {
+				ImGui::Indent(120);
+			}
+
+			if (!showOk) {
+				if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+					uploadState.cancelled = true;
+					uploadState.is_uploading = false;
+					ImGui::CloseCurrentPopup();
+				}
+			}
+			ImGui::EndPopup();
+
+			ImGui::CloseCurrentPopup();
+		}
+	}
+
+	if (downloadState.is_downloading) {
+		ImGui::OpenPopup("Downloading");
+		if (ImGui::BeginPopupModal("Downloading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+			ImGui::Text(("Downloading: " + downloadState.pack_code).c_str());
+			ImGui::ProgressBar(downloadState.progress);
+
+			if (downloadState.error != "") {
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+				ImGui::TextWrapped(downloadState.error.c_str());
+				ImGui::PopStyleColor();
+			}
+
+			bool showOk = downloadState.progress >= 1;
+			bool showRetry = downloadState.failed;
+			if (showOk) {
+				if (ImGui::Button("Ok", ImVec2(120, 0))) {
+					downloadState.is_downloading = false;
+				}
+				ImGui::SameLine();
+			}
+			else if (showRetry) {
+				if (ImGui::Button("Retry", ImVec2(120, 0))) {
+					downloadState.resetState();
+					boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this };
+				}
+			}
+			else {
+				ImGui::Indent(120);
+			}
+		}
 	}
 }

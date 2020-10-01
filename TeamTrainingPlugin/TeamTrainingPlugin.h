@@ -22,6 +22,8 @@ using namespace std;
 
 constexpr auto PLUGIN_VERSION = "0.2.8";
 constexpr auto SERVER_URL = "http://localhost:8000";
+constexpr int MAX_BALL_TICK_FAILURES = 3;
+constexpr int MAX_BALL_VELOCITY_ZERO = 5;
 
 const std::string CVAR_PREFIX("cl_team_training_");
 
@@ -156,31 +158,27 @@ private:
 	bool validatePlayers(ArrayWrapper<CarWrapper> cars);
 	std::vector<TrainingPack> getTrainingPacks();
 
-	std::vector<unsigned int> player_order;
+	std::vector<int> player_order;
 	std::shared_ptr<TrainingPack> pack;
 	unsigned int current_shot = 0;
 	unsigned int last_shot_set = 0;
 	bool goal_was_scored = false;
 
-	// Properties for printing custom training
-	void writeShotInfo(std::vector<std::string> params);
+	// Stuff needed for converting custom training
 	void internalConvert(std::vector<std::string> params);
-	void convert(int offense, int defense, int num_drills, std::string filename, std::string creator, std::string description, std::string code);
 	void onNextRound(std::string eventName);
 	void onBallTick(std::string eventName);
-	void writeDrillToFile();
 	void getNextShot();
 	std::filesystem::path getPackDataPath(std::string packName);
 
-	ofstream custom_training_export_file;
-	int offense;
-	int defense;
-	int num_drills;
-	int drills_written = 0;
-	TrainingPackBall custom_training_ball;
-	bool custom_training_ball_velocity_set = false;
-	bool custom_training_written = false;
-	std::vector<TrainingPackPlayer> custom_training_players;
+	void toggleBoost(int state);
+	void savePack();
+	void stopConversion(std::string message);
+
+	TrainingPack conversion_pack;
+	int ball_tick_failures;
+	int ball_velocity_zero;
+	int getNextShotCalled;
 
 /*
  * GUI stuffs
@@ -224,13 +222,14 @@ private:
 	static constexpr char CFG_FILE[] = "team_training.cfg";
 	static constexpr char RESET_CFG_FILE[] = "default_training.cfg";
 
-	void AddSearchFilters(SearchFilterState& filterState, string idPrefix, void (*searchCallback)(SearchFilterState& filterState));
+	void AddSearchFilters(SearchFilterState& filterState, string idPrefix, std::function<void(SearchFilterState&)> searchCallback);
 	void searchPacksThread(SearchFilterState& filters);
 	void SearchPacks(SearchFilterState& filters);
 	void downloadPackThread();
 	void DownloadPack(std::string code);
 	void uploadPackThread();
 	void UploadPack(const TrainingPack& pack);
+	void ShowLoadingModals();
 
 	DownloadState downloadState;
 	UploadState uploadState;

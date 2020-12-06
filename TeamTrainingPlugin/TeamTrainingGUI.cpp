@@ -8,11 +8,19 @@
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
-// TODO: Prevent users from uploading too frequently (in server code, not here) - by IP, by steamID, by 
+// TODO: Prevent users from uploading too frequently (in server code, not here) - by IP, by steamID...
 // TODO: Block uploads containing censored words (catch here, but also apply in server code)
 // TODO: Add commenting and ratings
 // TODO: Add tips/notes from multiple users
 // TODO: Allow reporting of packs, comments, tips, etc
+// Allow filtering on offense, defense, tags, drill name, creator, code
+// TODO: Specify 0 = none. Search on description. Search on creator.
+// TODO: Sorting methods. Add notes section in metadata.
+// TODO: How to determine which packs were downloaded vs created? How to determine which packs can be uploaded?
+// TODO: Track uploader from creator (we're going to upload packs we don't own).
+// TODO: Notes and other data should be updateable by both creator and uploader?
+// TODO: Method to force update packs (new censored words)
+// TODO: Just download all meta data?
 
 using namespace std;
 
@@ -168,14 +176,6 @@ void TeamTrainingPlugin::Render()
 		}
 
 		if (ImGui::BeginTabItem("Download Drills")) {
-			// Allow filtering on offense, defense, tags, drill name, creator, code
-			// TODO: Specify 0 = none. Search on description. Search on creator.
-			// TODO: Sorting methods. Add notes section in metadata.
-			// TODO: How to determine which packs were downloaded vs created? How to determine which packs can be uploaded?
-			// TODO: Track uploader from creator (we're going to upload packs we don't own).
-			// TODO: Notes and other data should be updateable by both creator and uploader?
-			// TODO: Allow comments and rating
-
 			AddSearchFilters(searchState.filters, "Downloads", std::bind(&TeamTrainingPlugin::SearchPacks, this, std::placeholders::_1));
 
 			ImGui::Separator();

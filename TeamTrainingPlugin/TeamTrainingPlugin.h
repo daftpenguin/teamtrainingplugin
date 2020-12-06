@@ -27,99 +27,6 @@ constexpr int MAX_BALL_VELOCITY_ZERO = 5;
 
 const std::string CVAR_PREFIX("cl_team_training_");
 
-class SearchFilterState : private boost::noncopyable {
-public:
-	SearchFilterState() : descriptionQuery(""), code(""), offense(0), defense(0) {};
-
-	string descriptionQuery;
-	char code[20];
-	int offense;
-	int defense;
-};
-
-class SearchState : private boost::noncopyable
-{
-public:
-	SearchState() : is_searching(false), failed(false), error(""), mutex() {};
-
-	void newSearch() {
-		resetState();
-		is_searching = true;
-	}
-
-	void resetState() {
-		is_searching = false;
-		failed = false;
-		error = "";
-	}
-
-	SearchFilterState filters;
-	vector<TrainingPackDBMetaData> packs;
-
-	bool is_searching;
-	bool failed;
-	string error;
-	boost::mutex mutex;
-};
-
-class DownloadState : private boost::noncopyable
-{
-public:
-	DownloadState() : is_downloading(false), failed(false), cancelled(false), progress(0), error(""), pack_code(""), mutex() {};
-
-	void newPack(string code) {
-		resetState();
-		pack_code = code;
-		is_downloading = true;
-	}
-
-	void resetState() {
-		is_downloading = false;
-		failed = false;
-		cancelled = false;
-		progress = 0;
-		error = "";
-	}
-
-	bool is_downloading;
-	bool failed;
-	bool cancelled;
-	float progress;
-	string error;
-	string pack_code;
-	boost::mutex mutex;
-};
-
-class UploadState : private boost::noncopyable
-{
-public:
-	UploadState() : is_uploading(false), failed(false), cancelled(false), progress(0), error(""), pack_path(""), pack_code(""), mutex() {};
-	
-	void newPack(TrainingPack pack) {
-		resetState();
-		pack_path = pack.filepath;
-		pack_code = pack.code;
-		is_uploading = true;
-	};
-
-	void resetState() {
-		is_uploading = false;
-		failed = false;
-		cancelled = false;
-		progress = 0;
-		error = "";
-	}
-
-	bool is_uploading;
-	bool failed;
-	bool cancelled;
-	float progress;
-	string error;
-	string pack_path;
-	string pack_code;
-	boost::mutex mutex;
-};
-
 class TeamTrainingPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginWindow
 {
 public:
@@ -127,7 +34,9 @@ public:
 	void onUnload();
 
 private:
-	// Console commands
+	/*
+	 * Training Pack Usage
+	 */
 	void onLoadTrainingPack(std::vector<std::string> params);
 	void onResetShot(std::vector<std::string> params);
 	void onNextShot(std::vector<std::string> params);
@@ -164,7 +73,10 @@ private:
 	unsigned int last_shot_set = 0;
 	bool goal_was_scored = false;
 
-	// Stuff needed for converting custom training
+/*
+ * Training Pack Conversion
+ */
+private:
 	void internalConvert(std::vector<std::string> params);
 	void onNextRound(std::string eventName);
 	void onBallTick(std::string eventName);
@@ -235,3 +147,99 @@ private:
 	UploadState uploadState;
 };
 
+/*
+ * State stuff needed for GUI 
+ */
+
+class SearchFilterState : private boost::noncopyable {
+public:
+	SearchFilterState() : descriptionQuery(""), code(""), offense(0), defense(0) {};
+
+	string descriptionQuery;
+	char code[20];
+	int offense;
+	int defense;
+};
+
+class SearchState : private boost::noncopyable
+{
+public:
+	SearchState() : is_searching(false), failed(false), error(""), mutex() {};
+
+	void newSearch() {
+		resetState();
+		is_searching = true;
+	}
+
+	void resetState() {
+		is_searching = false;
+		failed = false;
+		error = "";
+	}
+
+	SearchFilterState filters;
+	vector<TrainingPackDBMetaData> packs;
+
+	bool is_searching;
+	bool failed;
+	string error;
+	boost::mutex mutex;
+};
+
+class DownloadState : private boost::noncopyable
+{
+public:
+	DownloadState() : is_downloading(false), failed(false), cancelled(false), progress(0), error(""), pack_code(""), mutex() {};
+
+	void newPack(string code) {
+		resetState();
+		pack_code = code;
+		is_downloading = true;
+	}
+
+	void resetState() {
+		is_downloading = false;
+		failed = false;
+		cancelled = false;
+		progress = 0;
+		error = "";
+	}
+
+	bool is_downloading;
+	bool failed;
+	bool cancelled;
+	float progress;
+	string error;
+	string pack_code;
+	boost::mutex mutex;
+};
+
+class UploadState : private boost::noncopyable
+{
+public:
+	UploadState() : is_uploading(false), failed(false), cancelled(false), progress(0), error(""), pack_path(""), pack_code(""), mutex() {};
+
+	void newPack(TrainingPack pack) {
+		resetState();
+		pack_path = pack.filepath;
+		pack_code = pack.code;
+		is_uploading = true;
+	};
+
+	void resetState() {
+		is_uploading = false;
+		failed = false;
+		cancelled = false;
+		progress = 0;
+		error = "";
+	}
+
+	bool is_uploading;
+	bool failed;
+	bool cancelled;
+	float progress;
+	string error;
+	string pack_path;
+	string pack_code;
+	boost::mutex mutex;
+};

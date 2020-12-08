@@ -6,42 +6,15 @@
 #include <sstream>
 #include <Windows.h>
 
-static inline bool file_exists(const std::string &filepath)
-{
-	DWORD ftyp = GetFileAttributes(filepath.c_str());
-	return !(INVALID_FILE_ATTRIBUTES == ftyp && GetLastError() == ERROR_FILE_NOT_FOUND);
-}
 
-
-/* JSON Serializers */
-
-/*void to_json(json& j, const Vector& v) {
-	j = json{ {"x", v.X}, {"y", v.Y}, {"z", v.Z} };
-}
-
-void from_json(const json& j, Vector& v) {
-
-}*/
-
-
-/*TrainingPack::TrainingPack(std::string filename, int offense, int defense, std::string description, std::string creator, std::string code) :
-	filepath(".\\bakkesmod\\data\\teamtraining\\" + filename), offense(offense), defense(defense), description(description), creator(creator), code(code) {}*/
-
-TrainingPack::TrainingPack(std::string filepath) : filepath(filepath)
+TrainingPack::TrainingPack(fs::path filepath) : filepath(filepath.string())
 {
 	load_time = std::chrono::system_clock::now();
-	if (file_exists(filepath)) {
-		load(filepath);
+	if (fs::exists(filepath)) {
+		load(filepath.string());
 	}
 	else {
-		filepath = DRILL_FILES_DIR + filepath;
-		this->filepath = filepath;
-		if (file_exists(filepath)) {
-			load(filepath);
-		}
-		else {
-			errorMsg = "Pack not found";
-		}
+		errorMsg = "Pack not found";
 	}
 }
 
@@ -86,34 +59,6 @@ void TrainingPack::load(std::string filepath)
 
 	inFile.close();
 }
-
-/*void TrainingPack::save() {
-	if (drills.size() == 0) {
-		errorMsg = "No drills to save";
-		return;
-	}
-
-	std::ofstream o(filepath);
-
-	json j;
-	j["version"] = 2;
-	j["description"] = description;
-	j["creator"] = creator;
-	j["code"] = code;
-	j["offense"] = offense;
-	j["defense"] = defense;
-	
-	std::vector<json> json_drills = std::vector<json>();
-	for (TrainingPackDrill drill : drills) {
-		json_drills.push_back(json{
-			{"ball", json{ {} }}
-		});
-	}
-}
-
-void TrainingPack::addDrill(TrainingPackDrill drill) {
-	drills.push_back(drill);
-}*/
 
 TrainingPackDrill TrainingPack::parseDrill(json js_drill)
 {

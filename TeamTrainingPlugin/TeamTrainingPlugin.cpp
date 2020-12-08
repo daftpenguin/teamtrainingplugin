@@ -23,18 +23,19 @@
 
 #include "TeamTrainingPlugin.h"
 
-#include "bakkesmod\wrappers\includes.h"
-#include "bakkesmod\wrappers\GameEvent\ReplayDirectorWrapper.h"
-#include "bakkesmod\wrappers\WrapperStructs.h"
-#include "utils\parser.h"
+#include "bakkesmod/wrappers/includes.h"
+#include "bakkesmod/wrappers/GameEvent/ReplayDirectorWrapper.h"
+#include "bakkesmod/wrappers/WrapperStructs.h"
+#include "utils/parser.h"
 
 #include <algorithm>
 #include <random>
-#include <experimental\filesystem>
+#include <filesystem>
 #include <chrono>
 #include <cmath>
+#include <vector>
 
-namespace fs = std::experimental::filesystem;
+namespace fs = std::filesystem;
 using namespace std;
 
 #pragma comment (lib, "Ws2_32.lib")
@@ -43,6 +44,9 @@ BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", PLUGIN_VERSION, PLU
 
 mt19937 gen(chrono::system_clock::now().time_since_epoch().count());
 uniform_real_distribution<float> dist(0.0, 1.0);
+
+std::random_device rd;
+std::mt19937 urbg(rd());
 
 std::string vectorString(Vector v) {
 	std::stringstream ss;
@@ -58,7 +62,7 @@ std::string rotationString(Rotator r) {
 
 std::string vectorToString(std::vector<unsigned int> v) {
 	std::stringstream ss;
-	for (size_t i = 0; i < v.size(); i++) {
+	for (unsigned int i = 0; i < v.size(); i++) {
 		if (i != 0)
 			ss << ",";
 		ss << v[i];
@@ -107,7 +111,7 @@ void TeamTrainingPlugin::onLoad()
 	cvarManager->registerCvar(CVAR_PREFIX + "last_version_loaded", "", "The last version of the plugin that was loaded, used for displaying changelog first when plugin is updated.",
 		false, false, 0, 0, 0, true);
 
-	gameWrapper->LoadToastTexture("teamtraining1", ".\\bakkesmod\\data\\assets\\teamtraining_logo.png");
+	gameWrapper->LoadToastTexture("teamtraining1", gameWrapper->GetDataFolder() / "assets" / "teamtraining_logo.png");
 
 
 	/*gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
@@ -168,13 +172,8 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 		return;
 	}
 
-	std::string pack_name = params[1];
-	if (pack_name.size() < 5 || pack_name.substr(pack_name.size() - 5).compare(".json") != 0) {
-		pack_name += ".json";
-	}
-
 	bool firstPack = pack == NULL;
-	this->pack = std::make_shared<TrainingPack>(params[1]);
+	this->pack = std::make_shared<TrainingPack>(getPackDataPath(params[1]));
 	if (this->pack->errorMsg != "") {
 		this->pack = NULL;
 		cvarManager->log("Error opening training pack: " + this->pack->errorMsg);
@@ -193,7 +192,7 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 
 	cvarManager->log("Loaded training pack: " + this->pack->filepath);
 	if (cvarManager->getCvar("sv_training_autoshuffle").getBoolValue()) {
-		std::random_shuffle(pack->drills.begin(), pack->drills.end());
+		std::shuffle(pack->drills.begin(), pack->drills.end(), urbg);
 	}
 
 	auto cars = server.GetCars();
@@ -292,7 +291,7 @@ void TeamTrainingPlugin::setShot(int shot)
 
 	cvarManager->log("Setting passers to cars");
 	int i = 0;
-	for (auto player : drill.passers) {
+	for (auto &player : drill.passers) {
 		if (player_order[i] >= cars.Count()) {
 			cvarManager->log("Not enough cars for passer positions");
 			return;
@@ -317,7 +316,7 @@ void TeamTrainingPlugin::setShot(int shot)
 
 	cvarManager->log("Assigning defenders to cars");
 	if (cars.Count() > this->pack->offense) {
-		for (auto player : drill.defenders) {
+		for (auto &player : drill.defenders) {
 			if (player_order[i] >= cars.Count()) {
 				break;
 			}
@@ -436,7 +435,7 @@ sv_training_var_car_rot "0" //Randomly changes the car rotation by this amount (
 
 void TeamTrainingPlugin::randomizePlayers(std::vector<std::string> params)
 {
-	std::random_shuffle(std::begin(player_order), std::end(player_order));
+	std::shuffle(std::begin(player_order), std::end(player_order), urbg);
 	cvarManager->log("Player order: " + vectorToString(player_order));
 	resetShot();
 }
@@ -463,7 +462,10 @@ void TeamTrainingPlugin::listPacks(std::vector<std::string> params)
 		}
 	}
 	else {
-		cvarManager->log("No team training packs in data\\teamtraining directory");
+		if (packDataPath.length() == 0) {
+			packDataPath = getPackDataPath("").string();
+		}
+		cvarManager->log("No team training packs in " + packDataPath);
 	}
 }
 
@@ -576,7 +578,7 @@ void TeamTrainingPlugin::internalConvert(std::vector<std::string> params)
 	std::string code = params[7];
 
 	cvarManager->log("Saving data for pack: " + filename);
-	custom_training_export_file.open("bakkesmod\\data\\teamtraining\\" + filename + ".json");
+	custom_training_export_file.open(getPackDataPath(filename));
 	custom_training_export_file
 		<< "{\n\t\"version\": 3,\n\t\"description\": \"" << description << "\",\n"
 		<< "\t\"creator\": \"" << creator << "\",\n"
@@ -588,7 +590,7 @@ void TeamTrainingPlugin::internalConvert(std::vector<std::string> params)
 void TeamTrainingPlugin::convert(int offense, int defense, int num_drills, std::string filename, std::string creator, std::string description, std::string code)
 {
 	cvarManager->log("Saving data for pack: " + filename);
-	custom_training_export_file.open("bakkesmod\\data\\teamtraining\\" + filename + ".json");
+	custom_training_export_file.open(getPackDataPath(filename));
 	custom_training_export_file
 		<< "{\n\t\"version\": 3,\n\t\"description\": \"" << description << "\",\n"
 		<< "\t\"creator\": \"" << creator << "\",\n"
@@ -631,7 +633,7 @@ void TeamTrainingPlugin::writeShotInfo(std::vector<std::string> params)
 	}
 
 	cvarManager->log("Saving data for pack: " + drill_name);
-	custom_training_export_file.open("bakkesmod\\data\\teamtraining\\" + drill_name + ".json");
+	custom_training_export_file.open(getPackDataPath(drill_name));
 	std::string creator("Unknown");
 	std::string description("Unknown");
 	custom_training_export_file
@@ -705,7 +707,7 @@ void TeamTrainingPlugin::writeDrillToFile()
 		<< vectorString(custom_training_ball.angular) << "\n\t\t\t},\n\t\t\t\"players\": [\n";
 
 	int i = 0;
-	for (auto player : custom_training_players) {
+	for (auto &player : custom_training_players) {
 		std::string role = (i < offense - 1) ? "passer" : ((i == offense - 1) ? "shooter" : "defender");
 
 		if (i != 0) {
@@ -778,15 +780,34 @@ static inline bool dir_exists(const char *dirpath)
 std::map<std::string, TrainingPack> TeamTrainingPlugin::getTrainingPacks() {
 	std::map<std::string, TrainingPack> packs;
 
-	if (!dir_exists(DRILL_FILES_DIR)) {
+	fs::path dataPath = getPackDataPath("");
+	if (!fs::exists(dataPath)) {
 		return packs;
 	}
 
-	for (const auto & entry : fs::directory_iterator(DRILL_FILES_DIR)) {
+	for (const auto & entry : fs::directory_iterator(dataPath)) {
 		if (entry.path().has_extension() && entry.path().extension() == ".json") {
 			packs.emplace(entry.path().filename().string(), TrainingPack(entry.path().string()));
 		}
 	}
 
 	return packs;
+}
+
+fs::path TeamTrainingPlugin::getPackDataPath(std::string packName)
+{
+	if (packName.length() > 0) {
+		fs::path path = packName;
+		if (!path.has_extension()) {
+			path += ".json";
+		}
+
+		if (fs::exists(path)) {
+			return path.make_preferred();
+		}
+
+		return (gameWrapper->GetDataFolder() / "teamtraining" / path).make_preferred();
+	}
+
+	return (gameWrapper->GetDataFolder() / "teamtraining").make_preferred();
 }

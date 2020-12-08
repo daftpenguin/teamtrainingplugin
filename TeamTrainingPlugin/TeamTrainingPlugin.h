@@ -2,16 +2,16 @@
 
 #include <fstream>
 
-#include "bakkesmod\plugin\bakkesmodplugin.h"
-#include "bakkesmod\plugin\pluginwindow.h"
+#include "bakkesmod/plugin/bakkesmodplugin.h"
+#include "bakkesmod/plugin/pluginwindow.h"
 
-#include "imgui\imgui.h"
+#include "imgui/imgui.h"
 
 #include "TrainingPack.h"
 
 using namespace std;
 
-constexpr auto PLUGIN_VERSION = "0.2.7";
+constexpr auto PLUGIN_VERSION = "0.2.8";
 
 const std::string CVAR_PREFIX("cl_team_training_");
 
@@ -67,6 +67,7 @@ private:
 	void onBallTick(std::string eventName);
 	void writeDrillToFile();
 	void getNextShot();
+	std::filesystem::path getPackDataPath(std::string packName);
 
 	ofstream custom_training_export_file;
 	int offense;
@@ -90,6 +91,7 @@ private:
 		{ "Roles", {}},
 		{ "Creation", {}},
 	};
+	std::string packDataPath = "";
 	// Selection
 	std::map<std::string, TrainingPack> packs;
 	std::vector<std::string> pack_keys;

@@ -6,10 +6,10 @@
 #include <string>
 #include <vector>
 #include <chrono>
-
-static constexpr char DRILL_FILES_DIR[] = ".\\bakkesmod\\data\\teamtraining\\";
+#include <filesystem>
 
 using json = nlohmann::json;
+namespace fs = std::filesystem;
 
 struct TrainingPackBall {
 	Vector location;
@@ -57,7 +57,8 @@ class TrainingPack
 {
 public:
 	//TrainingPack(std::string filepath, int offense, int defense, std::string description, std::string creator, std::string code);
-	TrainingPack(std::string filepath);
+	TrainingPack(std::string filepath) : TrainingPack(fs::path(filepath)) {};
+	TrainingPack(fs::path filepath);
 	void load(std::string filepath);
 	//void addDrill(TrainingPackDrill drill);
 	//void save();

@@ -59,7 +59,10 @@ void TeamTrainingPlugin::Render()
 
 			if (packs.size() == 0) {
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-				ImGui::TextWrapped("No training packs exist in %s", DRILL_FILES_DIR);
+				if (packDataPath.length() == 0) {
+					packDataPath = getPackDataPath("").string();
+				}
+				ImGui::TextWrapped("No training packs exist in %s", packDataPath.c_str());
 				ImGui::TextWrapped("Plugin comes packaged with 3 training packs.");
 				ImGui::TextWrapped("Try reinstalling or unzipping the training packs from the Team Training plugin download on bakkesplugins.com.");
 				ImGui::PopStyleColor();
@@ -343,9 +346,18 @@ void TeamTrainingPlugin::Render()
 		if (ImGui::BeginTabItem("What's new", NULL, whatsNewFlags)) {
 			cvarManager->executeCommand(CVAR_PREFIX + "last_version_loaded " + PLUGIN_VERSION + "; writeconfig");
 
-			ImGui::TextWrapped("Last update: v0.2.7 (Sep 4 2020)");
+			ImGui::TextWrapped("v0.2.8 (Dec 7 2020)");
+			ImGui::TextWrapped("Changelog:");
+			ImGui::BulletText("Updated to work with upcoming Epic Games support");
+
+			ImGui::Separator();
+
+			ImGui::TextWrapped("v0.2.7 (Sep 4 2020)");
 			ImGui::TextWrapped("Changelog:");
 			ImGui::BulletText("Fixed bug causing crashes when variance is enabled");
+
+			ImGui::Separator();
+			
 			ImGui::TextWrapped("v0.2.6 (Sep 1 2020) changelog:");
 			ImGui::BulletText("Updated link from old bakkesmod.lib to new pluginsdk.lib");
 			ImGui::BulletText("Added support for drill shuffling and variance in drills using BakkesMod's built-in custom training options");

@@ -46,6 +46,9 @@ Set `cl_team_training` to 1 to randomize the shots in the training pack, and `cl
 
 # Changelog
 
+v0.2.8
+* Updated to work with upcoming Epic Games support
+
 v0.2.7
 * Fixed bug causing crashes when variance is enabled
 

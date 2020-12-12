@@ -4,7 +4,6 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 
 #include "cpp-httplib/httplib.h"
-#include <Windows.h>
 
 #include <fstream>
 

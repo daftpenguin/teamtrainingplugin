@@ -92,7 +92,9 @@ public:
 	std::string creator;
 	std::string code;
 
-	// Version 3 data
+	// Version 3 data only added angular field to the ball
+
+	// Version 4 data
 	std::string creatorID;
 	std::string uploader;
 	std::string uploaderID;

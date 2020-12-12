@@ -185,7 +185,7 @@ void TeamTrainingPlugin::Render()
 				ImGui::Spinner("Searching...", 30, 5);
 			}
 			else if (searchState.failed) {
-				ImGui::TextWrapped("Last search failed");
+				ImGui::TextWrapped("Search failed");
 				if (searchState.error != "") {
 					ImGui::TextWrapped(searchState.error.c_str());
 				}

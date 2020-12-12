@@ -22,7 +22,7 @@ TrainingPack::TrainingPack(fs::path filepath) : filepath(filepath.string()), ver
 {
 	load_time = std::chrono::system_clock::now();
 
-	if (fs::is_empty(filepath)) {
+	if (filepath.empty()) {
 		return;
 	}
 
@@ -164,7 +164,7 @@ void from_json(const json& j, TrainingPack& p)
 		j.at("description").get_to(p.description);
 		j.at("creator").get_to(p.creator);
 	}
-	if (p.version >= 3) {
+	if (p.version >= 4) { // Version 3 was for ball's angular field
 		j.at("creatorID").get_to(p.creatorID);
 
 		if (j.find("uploader") != j.end()) {

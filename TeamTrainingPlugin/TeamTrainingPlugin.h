@@ -20,24 +20,93 @@
 using namespace std;
 
 constexpr auto PLUGIN_VERSION = "0.2.8";
-constexpr auto SERVER_URL = "http://localhost:8000";
+constexpr auto SERVER_URL = "https://www.daftpenguin.com"; // TODO: Make this a cvar?
 constexpr int MAX_BALL_TICK_FAILURES = 3;
 constexpr int MAX_BALL_VELOCITY_ZERO = 5;
 
-const std::string CVAR_PREFIX("cl_team_training_");
+constexpr int MAX_FILENAME_LENGTH = 128;
+constexpr int MAX_DESCRIPTION_LENGTH = 500;
+constexpr int MAX_CREATOR_LENGTH = 128;
+constexpr int NUM_TAG_COLUMNS = 5;
+
+const string CVAR_PREFIX("cl_team_training_");
 
 /*
  * State stuff needed for GUI
  */
 
+class TagsState : private boost::noncopyable
+{
+public:
+	void refresh() {
+		oldTags.clear();
+		for (auto it = tags.begin(); it != tags.end(); ++it) {
+			oldTags[it->first] = it->second;
+		}
+		resetState();
+		is_downloading = true;
+	}
+
+	void retry() {
+		resetState();
+		is_downloading = true;
+	}
+
+	void cancel() {
+		resetState();
+		for (auto it = oldTags.begin(); it != oldTags.end(); ++it) {
+			tags[it->first] = it->second;
+		}
+		oldTags.clear();
+	}
+
+	void resetState() {
+		has_downloaded = false;
+		is_downloading = false;
+		failed = false;
+		cancelled = false;
+		progress = 0;
+		error = "";
+		tags.clear();
+	}
+
+	void undoEdits() {
+		// Cancelling the tag edits, though a refresh of the tags could cause changes (in the case where a previously selected tag was removed from the list of retrieved tags)
+		for (auto it = tags.begin(); it != tags.end(); ++it) {
+			tags[it->first] = false;
+		}
+		for (auto it = beforeEditEnabledTags.begin(); it != beforeEditEnabledTags.end(); ++it) {
+			if (tags.find(*it) != tags.end()) {
+				tags[*it] = true;
+			}
+		}
+	}
+
+	vector<string> GetEnabledTags() const;
+
+	bool has_downloaded;
+	bool is_downloading;
+	bool failed;
+	bool cancelled;
+	float progress;
+	string error;
+	vector<string> beforeEditEnabledTags; // If user cancels editing the tags, reset them
+	map<string, bool> tags;               // Tag => is enabled?
+	map<string, bool> oldTags;            // Old tag => is enabled? mapping so we can restore if user cancels refresh or it fails
+	boost::mutex mutex;
+};
+
 class SearchFilterState : private boost::noncopyable {
 public:
-	SearchFilterState() : descriptionQuery(""), code(""), offense(0), defense(0) {};
+	SearchFilterState() : description(""), creator(""), code(""), offense(0), defense(0) {};
 
-	string descriptionQuery;
+	char description[MAX_DESCRIPTION_LENGTH];
+	char creator[MAX_CREATOR_LENGTH];
 	char code[20];
 	int offense;
 	int defense;
+
+	TagsState tagsState;
 };
 
 class SearchState : private boost::noncopyable
@@ -209,9 +278,9 @@ private:
 	int offensive_players = 0;
 	int defensive_players = 0;
 	int gui_num_drills = 1;
-	char filename[128] = "";
-	char creator[128] = "";
-	char description[500] = "";
+	char filename[MAX_FILENAME_LENGTH] = "";
+	char creator[MAX_CREATOR_LENGTH] = "";
+	char description[MAX_DESCRIPTION_LENGTH] = "";
 	char code[20] = "";
 	// Settings
 	char countdown[10] = "1.0";
@@ -233,12 +302,16 @@ private:
 	void AddSearchFilters(SearchFilterState& filterState, string idPrefix, std::function<void(SearchFilterState&)> searchCallback);
 	void searchPacksThread(SearchFilterState& filters);
 	void SearchPacks(SearchFilterState& filters);
+	void downloadTagsThread(SearchFilterState& filters);
 	void downloadPackThread();
 	void DownloadPack(std::string code);
 	void uploadPackThread();
 	void UploadPack(const TrainingPack& pack);
 	void ShowLoadingModals();
+	void ShowTagsWindow(SearchFilterState& state);
 
 	DownloadState downloadState;
 	UploadState uploadState;
 };
+
+void to_json(json& j, const SearchFilterState& s);

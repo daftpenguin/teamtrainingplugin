@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <sstream>
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/algorithm/string/join.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
@@ -13,7 +14,7 @@
 // TODO: Add commenting and ratings
 // TODO: Add tips/notes from multiple users
 // TODO: Allow reporting of packs, comments, tips, etc
-// Allow filtering on offense, defense, tags, drill name, creator, code
+// TODO: Allow filtering on offense, defense, tags, drill name, creator, code
 // TODO: Specify 0 = none. Search on description. Search on creator.
 // TODO: Sorting methods. Add notes section in metadata.
 // TODO: How to determine which packs were downloaded vs created? How to determine which packs can be uploaded?
@@ -175,7 +176,7 @@ void TeamTrainingPlugin::Render()
 			ImGui::EndTabItem();
 		}
 
-		if (ImGui::BeginTabItem("Download Drills")) {
+		if (ImGui::BeginTabItem("Download Drills (beta)")) {
 			AddSearchFilters(searchState.filters, "Downloads", std::bind(&TeamTrainingPlugin::SearchPacks, this, std::placeholders::_1));
 
 			ImGui::Separator();
@@ -516,17 +517,14 @@ void TeamTrainingPlugin::searchPacksThread(SearchFilterState& filters)
 {
 	searchState.is_searching = true;
 
-	stringstream query;
-	query << "/api/rocket-league/teamtraining/search?type=packs";
-	if (filters.offense > 0) {
-		query << "&offense=" << filters.offense;
-	}
-	if (filters.defense > 0) {
-		query << "&defense=" << filters.defense;
-	}
+	std::string url = "/api/rocket-league/teamtraining/search";
+	json j(filters);
+	j["type"] = "packs";
+
+	cvarManager->log(j.dump());
 
 	httplib::Client cli(SERVER_URL);
-	if (auto res = cli.Get(query.str().c_str())) {
+	if (auto res = cli.Post(url.c_str(), j.dump(), "application/json")) {
 		if (res->status == 200) {
 			json js;
 			try {
@@ -577,6 +575,59 @@ void TeamTrainingPlugin::SearchPacks(SearchFilterState& filters)
 	searchState.newSearch();
 	searchState.packs.clear();
 	boost::thread t{ &TeamTrainingPlugin::searchPacksThread, this, boost::ref(filters) };
+}
+
+void TeamTrainingPlugin::downloadTagsThread(SearchFilterState &state)
+{
+	std::string url = "/api/rocket-league/teamtraining/search";
+	json j;
+	j["type"] = "tags";
+
+	// TODO: Remove fake work
+	for (int i = 0; i < 5; i++) {
+		boost::this_thread::sleep_for(boost::chrono::seconds(1));
+		uploadState.progress = uploadState.progress + 0.15f;
+	}
+
+	httplib::Client cli(SERVER_URL);
+	if (auto res = cli.Post(url.c_str(), j.dump(), "application/json")) {
+		if (res->status == 200) {
+			json js;
+			try {
+				js = json::parse(res->body);
+			}
+			catch (...) {
+				cvarManager->log(res->body);
+				searchState.error = "Error parsing response from server";
+				return;
+			}
+
+			cvarManager->log(res->body);
+
+			vector<string> tags = js.get<vector<string>>();
+			for (auto it = tags.begin(); it != tags.end(); ++it) {
+				state.tagsState.tags[*it] = false;
+				auto oldIt = state.tagsState.oldTags.find(*it);
+				if (oldIt != state.tagsState.oldTags.end()) {
+					state.tagsState.tags[*it] = oldIt->second;
+				}
+			}
+			state.tagsState.oldTags.clear();
+			state.tagsState.is_downloading = false;
+		}
+		else {
+			cvarManager->log(res->body);
+			state.tagsState.is_downloading = false;
+			state.tagsState.failed = true;
+			state.tagsState.error = res->body;
+		}
+	}
+	else {
+		cvarManager->log("Failed to reach host");
+		state.tagsState.is_downloading = false;
+		state.tagsState.failed = true;
+		state.tagsState.error = "Failed to reach host";
+	}
 }
 
 void TeamTrainingPlugin::downloadPackThread()
@@ -671,15 +722,95 @@ void TeamTrainingPlugin::AddSearchFilters(SearchFilterState& filterState, string
 	if (ImGui::InputInt(("Defensive players##" + idPrefix + "Defense").c_str(), &filterState.defense, ImGuiInputTextFlags_CharsDecimal)) {
 		filterState.defense = (filterState.defense < 0) ? 0 : filterState.defense;
 	}
+	ImGui::InputText(("Description##" + idPrefix + "Description").c_str(), searchState.filters.description, IM_ARRAYSIZE(searchState.filters.description));
+	ImGui::InputText(("Creator##" + idPrefix + "Creator").c_str(), searchState.filters.creator, IM_ARRAYSIZE(searchState.filters.creator));
 	ImGui::InputText(("Training Pack Code##" + idPrefix + "Code").c_str(), searchState.filters.code, IM_ARRAYSIZE(searchState.filters.code));
+
+	ImGui::Text("Labels: %s", boost::algorithm::join(filterState.tagsState.GetEnabledTags(), ", ").c_str());
+	
+	if (ImGui::Button(("Edit Labels##" + idPrefix + "EditLabels").c_str())) {
+		if (!filterState.tagsState.has_downloaded) {
+			filterState.tagsState.refresh();
+			boost::thread t{ &TeamTrainingPlugin::downloadTagsThread, this, boost::ref(filterState) };
+		}
+		ImGui::OpenPopup("Edit Labels");
+	}
+	ShowTagsWindow(filterState);
 
 	if (ImGui::Button(("Search##" + idPrefix + "SearchButton").c_str())) {
 		searchCallback(filterState);
 	}
 }
 
+void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state)
+{
+	ImGui::SetNextWindowSizeConstraints(ImVec2(55 + 250 + 55 + 250 + 80 + 100, 600), ImVec2(FLT_MAX, FLT_MAX));
+	if (ImGui::BeginPopupModal("Edit Labels", NULL)) {
+		if (state.tagsState.is_downloading) {
+			ImGui::Text("Retrieving Labels from Server");
+			ImGui::SetCursorPos((ImGui::GetWindowSize() - ImVec2(30, 30)) * ImVec2(0.5f, 0.25f));
+			ImGui::Spinner("Retrieving...", 30, 5);
+		}
+		else {
+			if (state.tagsState.error != "") {
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+				ImGui::TextWrapped(state.tagsState.error.c_str());
+				ImGui::PopStyleColor();
+			}
+
+			bool showRetry = state.tagsState.failed;
+			if (showRetry) {
+				if (ImGui::Button("Retry", ImVec2(120, 0))) {
+					state.tagsState.retry();
+					boost::thread t{ &TeamTrainingPlugin::downloadTagsThread, this, boost::ref(state) };
+				}
+				if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+					state.tagsState.cancel();
+					if (state.tagsState.tags.size() == 0) {
+						state.tagsState.undoEdits();
+						ImGui::CloseCurrentPopup();
+					}
+				}
+			}
+			else {
+				// Populate checkboxes
+				ImGui::Columns(NUM_TAG_COLUMNS, NULL, false);
+				size_t columnSize = 1 + ((state.tagsState.tags.size() - 1) / (size_t)NUM_TAG_COLUMNS); // Fast ceiling of int div
+				size_t i = 0;
+				for (auto it = state.tagsState.tags.begin(); it != state.tagsState.tags.end(); ++it) {
+					if (i != 0 && i % columnSize == 0) {
+						ImGui::NextColumn();
+					}
+					++i;
+					ImGui::Checkbox(it->first.c_str(), &it->second);
+				}
+				ImGui::EndColumns();
+			}
+		}
+
+		ImGui::Dummy(ImVec2(0.0f, 10.0f));
+		if (ImGui::Button("Apply")) {
+			state.tagsState.beforeEditEnabledTags.clear();
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel")) {
+			state.tagsState.undoEdits();
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Refresh Tags")) {
+			state.tagsState.refresh();
+			boost::thread t{ &TeamTrainingPlugin::downloadTagsThread, this, boost::ref(state) };
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
 void TeamTrainingPlugin::ShowLoadingModals()
 {
+	// TODO: Use OpenPopup properly
 	if (uploadState.is_uploading) {
 		ImGui::OpenPopup("Uploading");
 		if (ImGui::BeginPopupModal("Uploading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -719,11 +850,11 @@ void TeamTrainingPlugin::ShowLoadingModals()
 				}
 			}
 			ImGui::EndPopup();
-
-			ImGui::CloseCurrentPopup();
 		}
+		ImGui::CloseCurrentPopup();
 	}
 
+	// TODO: Missing EndPopup?
 	if (downloadState.is_downloading) {
 		ImGui::OpenPopup("Downloading");
 		if (ImGui::BeginPopupModal("Downloading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -755,4 +886,26 @@ void TeamTrainingPlugin::ShowLoadingModals()
 			}
 		}
 	}
+}
+
+vector<string> TagsState::GetEnabledTags() const {
+	vector<string> tags;
+	for (auto it = this->tags.begin(); it != this->tags.end(); ++it) {
+		if (it->second) {
+			tags.push_back(it->first);
+		}
+	}
+	return tags;
+}
+
+void to_json(json& j, const SearchFilterState& s)
+{
+	j = json{
+		{"description", s.description},
+		{"creator", s.creator},
+		{"code", s.code},
+		{"offense", s.offense},
+		{"defense", s.defense},
+		{"tags", s.tagsState.GetEnabledTags()}
+	};
 }

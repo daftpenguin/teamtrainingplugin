@@ -10,12 +10,13 @@
 #include <vector>
 #include <chrono>
 #include <filesystem>
+#include <unordered_set>
 
 using json = nlohmann::ordered_json;
 namespace fs = std::filesystem;
 
 static constexpr int NO_UPLOAD_ID = -1;
-static constexpr int LATEST_TRAINING_PACK_VERSION = 3;
+static constexpr int LATEST_TRAINING_PACK_VERSION = 4;
 
 struct TrainingPackDBMetaData {
 	std::string code;
@@ -25,6 +26,7 @@ struct TrainingPackDBMetaData {
 	int defense;
 	int num_drills;
 	int downloads;
+	std::unordered_set<std::string> tags;
 };
 
 struct TrainingPackBall {
@@ -82,7 +84,7 @@ public:
 	
 	std::string errorMsg = ""; // Use this to display error messages in pack selection tab
 	std::chrono::system_clock::time_point load_time;
-	std::string filepath;
+	fs::path filepath;
 	int version = 0;
 	int offense = 0;
 	int defense = 0;
@@ -99,7 +101,7 @@ public:
 	std::string uploader;
 	std::string uploaderID;
 	int uploadID;
-	std::vector<std::string> tags;
+	std::unordered_set<std::string> tags;
 
 	std::vector<TrainingPackDrill> drills;
 
@@ -114,6 +116,9 @@ public:
 	bool lastPlayerAddedWasFirstPasser();
 	bool allPlayersInDrillAdded();
 	bool expectingMoreDrills();
+
+	void addTag(std::string tag);
+	void removeTag(std::string tag);
 
 	int expected_drills;
 	int players_added = 0;

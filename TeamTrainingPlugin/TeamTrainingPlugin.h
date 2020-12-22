@@ -20,7 +20,7 @@
 using namespace std;
 
 constexpr auto PLUGIN_VERSION = "0.2.8";
-constexpr auto SERVER_URL = "https://www.daftpenguin.com"; // TODO: Make this a cvar?
+constexpr auto SERVER_URL = "http://localhost:8000"; // TODO: Make this a cvar?
 constexpr int MAX_BALL_TICK_FAILURES = 3;
 constexpr int MAX_BALL_VELOCITY_ZERO = 5;
 
@@ -35,6 +35,7 @@ const string CVAR_PREFIX("cl_team_training_");
  * State stuff needed for GUI
  */
 
+// TODO: This evolved into ugliness, fix it...
 class TagsState : private boost::noncopyable
 {
 public:
@@ -60,6 +61,12 @@ public:
 		oldTags.clear();
 	}
 
+	void clear() {
+		for (auto it = tags.begin(); it != tags.end(); ++it) {
+			it->second = false;
+		}
+	}
+
 	void resetState() {
 		has_downloaded = false;
 		is_downloading = false;
@@ -68,6 +75,18 @@ public:
 		progress = 0;
 		error = "";
 		tags.clear();
+	}
+
+	void restoreSelected() {
+		for (auto it = oldTags.begin(); it != oldTags.end(); ++it) {
+			if (it->second) {
+				auto newIt = tags.find(it->first);
+				if (newIt != tags.end()) {
+					tags[it->first] = true;
+				}
+			}
+		}
+		oldTags.clear();
 	}
 
 	void undoEdits() {
@@ -99,6 +118,15 @@ public:
 class SearchFilterState : private boost::noncopyable {
 public:
 	SearchFilterState() : description(""), creator(""), code(""), offense(0), defense(0) {};
+
+	void clear() {
+		description[0] = 0;
+		creator[0] = 0;
+		code[0] = 0;
+		offense = 0;
+		defense = 0;
+		tagsState.clear();
+	}
 
 	char description[MAX_DESCRIPTION_LENGTH];
 	char creator[MAX_CREATOR_LENGTH];
@@ -165,7 +193,7 @@ public:
 class UploadState : private boost::noncopyable
 {
 public:
-	UploadState() : is_uploading(false), failed(false), cancelled(false), progress(0), error(""), pack_path(""), pack_code(""), mutex() {};
+	UploadState() : is_uploading(false), failed(false), cancelled(false), progress(0), error(""), pack_path(fs::path()), pack_code(""), mutex() {};
 
 	void newPack(TrainingPack pack) {
 		resetState();
@@ -187,8 +215,10 @@ public:
 	bool cancelled;
 	float progress;
 	string error;
-	string pack_path;
+	fs::path pack_path;
 	string pack_code;
+	string uploaderID;
+	string uploader;
 	boost::mutex mutex;
 };
 
@@ -271,8 +301,12 @@ private:
 	};
 	std::string packDataPath = "";
 	// Selection
+	int selectedPackIdx = 0;
 	std::vector<TrainingPack> packs;
+	std::vector<TrainingPack> filteredPacks;
+	SearchState localFilterState;
 	// Downloads
+	int downloadSelectedPackIdx = 0;
 	SearchState searchState;
 	// Creation
 	int offensive_players = 0;
@@ -299,16 +333,21 @@ private:
 	static constexpr char CFG_FILE[] = "team_training.cfg";
 	static constexpr char RESET_CFG_FILE[] = "default_training.cfg";
 
-	void AddSearchFilters(SearchFilterState& filterState, string idPrefix, std::function<void(SearchFilterState&)> searchCallback);
+	void AddSearchFilters(
+		SearchFilterState& filterState, string idPrefix, bool alwaysShowSearchButton,
+		std::function<void(SearchFilterState& filters)> tagLoader,
+		std::function<void(SearchFilterState& filters)> searchCallback);
+	void filterLocalPacks(SearchFilterState& filters);
 	void searchPacksThread(SearchFilterState& filters);
 	void SearchPacks(SearchFilterState& filters);
 	void downloadTagsThread(SearchFilterState& filters);
+	void loadLocalTagsThread(SearchFilterState& filters);
 	void downloadPackThread();
 	void DownloadPack(std::string code);
 	void uploadPackThread();
 	void UploadPack(const TrainingPack& pack);
 	void ShowLoadingModals();
-	void ShowTagsWindow(SearchFilterState& state);
+	void ShowTagsWindow(SearchFilterState& state, std::function<void(SearchFilterState& filters)> tagLoader);
 
 	DownloadState downloadState;
 	UploadState uploadState;

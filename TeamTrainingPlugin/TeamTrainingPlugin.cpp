@@ -19,7 +19,7 @@ using namespace std;
 
 #pragma comment (lib, "Ws2_32.lib")
 
-BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", PLUGIN_VERSION, PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING | PLUGINTYPE_THREADED)
+BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", PLUGIN_VERSION, PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING)
 
 mt19937 gen((unsigned int) chrono::system_clock::now().time_since_epoch().count());
 uniform_real_distribution<float> dist(0.0, 1.0);
@@ -179,7 +179,7 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 			std::bind(&TeamTrainingPlugin::onFreeplayDestroyed, this, std::placeholders::_1));
 	}
 
-	cvarManager->log("Loaded training pack: " + this->pack->filepath);
+	cvarManager->log("Loaded training pack: " + this->pack->filepath.string());
 	if (cvarManager->getCvar("sv_training_autoshuffle").getBoolValue()) {
 		std::shuffle(pack->drills.begin(), pack->drills.end(), urbg);
 	}
@@ -448,7 +448,7 @@ void TeamTrainingPlugin::listPacks(std::vector<std::string> params)
 	if (packs.size() > 0) {
 		cvarManager->log("Available team training packs:");
 		for (auto const& pack : packs) {
-			cvarManager->log(pack.filepath);
+			cvarManager->log(pack.filepath.string());
 		}
 	}
 	else {

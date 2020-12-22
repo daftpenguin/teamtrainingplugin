@@ -6,6 +6,7 @@
 #include <sstream>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
@@ -57,6 +58,16 @@ void TeamTrainingPlugin::Render()
 		if (ImGui::BeginTabItem("Selection")) {
 			ImGui::TextWrapped("Be sure to start a multiplayer freeplay session via Rocket Plugin before loading a pack.");
 
+			// This must be done before calling AddSearchFilters
+			if (packs.size() == 0) {
+				packs = getTrainingPacks();
+				filterLocalPacks(localFilterState.filters);
+			}
+
+			AddSearchFilters(localFilterState.filters, "Selection", false,
+				std::bind(&TeamTrainingPlugin::loadLocalTagsThread, this, std::placeholders::_1),
+				std::bind(&TeamTrainingPlugin::filterLocalPacks, this, std::placeholders::_1));
+
 			if (errorMsgs["Selection"].size() > 0) {
 				ImGui::Separator();
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
@@ -67,12 +78,8 @@ void TeamTrainingPlugin::Render()
 				ImGui::Separator();
 			}
 
-			if (ImGui::Button("Refresh")) {
+			if (ImGui::Button("Reload Packs")) {
 				packs.clear();
-			}
-
-			if (packs.size() == 0) {
-				packs = getTrainingPacks();
 			}
 
 			if (packs.size() == 0) {
@@ -85,22 +92,26 @@ void TeamTrainingPlugin::Render()
 				ImGui::TextWrapped("Try reinstalling or unzipping the training packs from the Team Training plugin download on bakkesplugins.com.");
 				ImGui::PopStyleColor();
 			}
+			else if (filteredPacks.size() == 0) {
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+				ImGui::TextWrapped("No training packs found with the given filter options");
+				ImGui::PopStyleColor();
+			}
 			else {
 				// Left Selection
-				static int selected = 0;
 				ImGui::BeginChild("left pane", ImVec2(300, 0), true);
 				int i = 0;
-				for (auto pack : packs) {
+				for (auto pack : filteredPacks) {
 					if (pack.errorMsg != "") {
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
 					}
-					if (ImGui::Selectable((pack.description + "##Selection" + to_string(i)).c_str(), selected == i)) {
-						selected = i;
+					if (ImGui::Selectable((pack.description + "##Selection" + to_string(i)).c_str(), selectedPackIdx == i)) {
+						selectedPackIdx = i;
 					}
 					if (pack.errorMsg != "") {
 						ImGui::PopStyleColor();
 					}
-					if (selected == i) {
+					if (selectedPackIdx == i) {
 						ImGui::SetItemDefaultFocus();
 					}
 					i++;
@@ -109,7 +120,7 @@ void TeamTrainingPlugin::Render()
 				ImGui::SameLine();
 
 				// Right Details
-				TrainingPack pack = packs[selected];
+				TrainingPack pack = filteredPacks[selectedPackIdx];
 				ImGui::BeginGroup();
 
 				if (pack.errorMsg == "") {
@@ -149,12 +160,19 @@ void TeamTrainingPlugin::Render()
 					ImGui::Text("Drills: %d", pack.drills.size());
 					ImGui::Text("Code: %s", pack.code.c_str());
 					ImGui::Text("Filepath: %s", pack.filepath.c_str());
+					ImGui::Text("Tags: %s", boost::algorithm::join(pack.tags, ", ").c_str());
 
 					ImGui::Separator();
 
-					if (ImGui::Button("Upload")) {
-						UploadPack(pack);
+					if (pack.uploadID == NO_UPLOAD_ID) {
+						if (ImGui::Button("Upload")) {
+							UploadPack(pack);
+						}
 					}
+					ImGui::SameLine();
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+					ImGui::TextWrapped("Warning: Double check your tags, description, etc as you cannot currently upload updated versions of training packs.");
+					ImGui::PopStyleColor();
 
 					ImGui::EndChild();
 				}
@@ -176,10 +194,10 @@ void TeamTrainingPlugin::Render()
 			ImGui::EndTabItem();
 		}
 
-		if (ImGui::BeginTabItem("Download Drills (beta)")) {
-			AddSearchFilters(searchState.filters, "Downloads", std::bind(&TeamTrainingPlugin::SearchPacks, this, std::placeholders::_1));
-
-			ImGui::Separator();
+		if (ImGui::BeginTabItem("Download Packs (beta)")) {
+			AddSearchFilters(searchState.filters, "Downloads", true,
+				std::bind(&TeamTrainingPlugin::downloadTagsThread, this, std::placeholders::_1),
+				std::bind(&TeamTrainingPlugin::SearchPacks, this, std::placeholders::_1));
 
 			if (searchState.is_searching) {
 				ImGui::SetCursorPos((ImGui::GetWindowSize() - ImVec2(30, 30)) * 0.5f);
@@ -196,14 +214,13 @@ void TeamTrainingPlugin::Render()
 			}
 			else {
 				// Left Selection
-				static int selected = 0;
 				ImGui::BeginChild("left pane", ImVec2(150, 0), true);
 				int i = 0;
 				for (auto pack : searchState.packs) {
-					if (ImGui::Selectable((pack.description + "##" + to_string(i)).c_str(), selected == i)) {
-						selected = i;
+					if (ImGui::Selectable((pack.description + "##" + to_string(i)).c_str(), downloadSelectedPackIdx == i)) {
+						downloadSelectedPackIdx = i;
 					}
-					if (selected == i) {
+					if (downloadSelectedPackIdx == i) {
 						ImGui::SetItemDefaultFocus();
 					}
 					i++;
@@ -212,7 +229,7 @@ void TeamTrainingPlugin::Render()
 				ImGui::SameLine();
 
 				// Right Details
-				TrainingPackDBMetaData pack = searchState.packs[selected];
+				TrainingPackDBMetaData pack = searchState.packs[downloadSelectedPackIdx];
 				ImGui::BeginGroup();
 
 				if (ImGui::Button("Download##BySearch")) {
@@ -235,6 +252,7 @@ void TeamTrainingPlugin::Render()
 				ImGui::Text("Defensive Players: %d", pack.defense);
 				ImGui::Text("Drills: %d", pack.num_drills);
 				ImGui::Text("Code: %s", pack.code.c_str());
+				ImGui::Text("Tags: %s", boost::algorithm::join(pack.tags, ", ").c_str());
 
 				ImGui::EndChild();
 
@@ -332,6 +350,7 @@ void TeamTrainingPlugin::Render()
 				ImGui::Separator();
 			}
 
+			// TODO: Hook game event when training pack loaded and store this data always (unload when training pack unloaded)
 			if (gameWrapper->IsInCustomTraining()) {
 				auto trainingEditor = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address);
 				auto trainingSaveData = trainingEditor.GetTrainingData();
@@ -513,8 +532,52 @@ void TeamTrainingPlugin::OnClose()
 	packs.clear();
 }
 
+void TeamTrainingPlugin::filterLocalPacks(SearchFilterState& filters)
+{
+	filteredPacks.clear();
+	selectedPackIdx = 0;
+
+	for (auto& pack : packs) {
+		std::string packCode = boost::algorithm::to_lower_copy(pack.code);
+		std::string filterCode = boost::algorithm::to_lower_copy(std::string(filters.code));
+		if (!filterCode.empty() && packCode.compare(filterCode) != 0) continue;
+
+		std::string packCreator = boost::algorithm::to_lower_copy(pack.creator);
+		std::string filterCreator = boost::algorithm::to_lower_copy(std::string(filters.creator));
+		if (!filterCreator.empty() && packCreator.compare(filterCreator) != 0) continue;
+
+		if (filters.offense != 0 && pack.offense != filters.offense) {
+			cvarManager->log("Filtering on offense");
+			continue;
+		}
+		if (filters.defense != 0 && pack.defense != filters.defense) {
+			cvarManager->log("Filtering on defense");
+			continue;
+		}
+
+		auto enabledTags = filters.tagsState.GetEnabledTags();
+		if (enabledTags.size() > 0) {
+			bool matchingTag = false;
+			for (auto& tag : enabledTags) {
+				if (pack.tags.find(tag) != pack.tags.end()) {
+					matchingTag = true;
+					break;
+				}
+			}
+			if (!matchingTag) continue;
+		}
+
+		std::string packDescription = boost::algorithm::to_lower_copy(pack.description);
+		std::string filterDescription = boost::algorithm::to_lower_copy(std::string(filters.description));
+		if (!filterDescription.empty() && packDescription.find(filterDescription) == std::string::npos) continue;
+
+		filteredPacks.push_back(pack);
+	}
+}
+
 void TeamTrainingPlugin::searchPacksThread(SearchFilterState& filters)
 {
+	downloadSelectedPackIdx = 0;
 	searchState.is_searching = true;
 
 	std::string url = "/api/rocket-league/teamtraining/search";
@@ -540,17 +603,16 @@ void TeamTrainingPlugin::searchPacksThread(SearchFilterState& filters)
 				TrainingPackDBMetaData pack;
 				pack.code = jsPack["code"].get<string>();
 				pack.description = jsPack["description"].get<string>();
-				pack.creator = jsPack["creator"].get<string>();
+				pack.creator = jsPack["creator_name"].get<string>();
 				pack.offense = jsPack["offense"].get<int>();
 				pack.defense = jsPack["defense"].get<int>();
 				pack.num_drills = jsPack["num_drills"].get<int>();
 				pack.downloads = jsPack["downloads"].get<int>();
+				for (json tag : jsPack["tags"]) {
+					pack.tags.insert(tag.get<std::string>());
+					cvarManager->log(tag.get<std::string>());
+				}
 				searchState.packs.push_back(pack);
-			}
-
-			// TODO: Remove fake work
-			for (int i = 0; i < 6; i++) {
-				boost::this_thread::sleep_for(boost::chrono::seconds(1));
 			}
 
 			searchState.is_searching = false;
@@ -583,12 +645,6 @@ void TeamTrainingPlugin::downloadTagsThread(SearchFilterState &state)
 	json j;
 	j["type"] = "tags";
 
-	// TODO: Remove fake work
-	for (int i = 0; i < 5; i++) {
-		boost::this_thread::sleep_for(boost::chrono::seconds(1));
-		uploadState.progress = uploadState.progress + 0.15f;
-	}
-
 	httplib::Client cli(SERVER_URL);
 	if (auto res = cli.Post(url.c_str(), j.dump(), "application/json")) {
 		if (res->status == 200) {
@@ -607,13 +663,10 @@ void TeamTrainingPlugin::downloadTagsThread(SearchFilterState &state)
 			vector<string> tags = js.get<vector<string>>();
 			for (auto it = tags.begin(); it != tags.end(); ++it) {
 				state.tagsState.tags[*it] = false;
-				auto oldIt = state.tagsState.oldTags.find(*it);
-				if (oldIt != state.tagsState.oldTags.end()) {
-					state.tagsState.tags[*it] = oldIt->second;
-				}
 			}
-			state.tagsState.oldTags.clear();
+			state.tagsState.restoreSelected();
 			state.tagsState.is_downloading = false;
+			state.tagsState.has_downloaded = true;
 		}
 		else {
 			cvarManager->log(res->body);
@@ -628,6 +681,19 @@ void TeamTrainingPlugin::downloadTagsThread(SearchFilterState &state)
 		state.tagsState.failed = true;
 		state.tagsState.error = "Failed to reach host";
 	}
+}
+
+void TeamTrainingPlugin::loadLocalTagsThread(SearchFilterState& state)
+{
+	for (auto& pack : packs) {
+		for (auto it = pack.tags.begin(); it != pack.tags.end(); ++it) {
+			state.tagsState.tags[*it] = false;
+		}
+	}
+	state.tagsState.restoreSelected();
+
+	state.tagsState.is_downloading = false;
+	state.tagsState.has_downloaded = true;
 }
 
 void TeamTrainingPlugin::downloadPackThread()
@@ -673,24 +739,28 @@ void TeamTrainingPlugin::uploadPackThread()
 {
 	httplib::Client cli(SERVER_URL);
 
-	ifstream fin(uploadState.pack_path.c_str());
-	std::stringstream buffer;
-	buffer << fin.rdbuf();
+	cvarManager->log("Reading pack file: " + uploadState.pack_path.string());
 
-	string data = buffer.str();
+	TrainingPack pack(uploadState.pack_path);
+	pack.uploaderID = uploadState.uploaderID;
+	pack.uploader = uploadState.uploader;
+
+	cvarManager->log("Converting pack to json");
+	json js(pack);
+	if (pack.errorMsg != "") {
+		uploadState.failed = true;
+		uploadState.error = pack.errorMsg;
+		return;
+	}
 
 	httplib::MultipartFormDataItems items = {
-		{ "file", buffer.str(), uploadState.pack_code + ".json", "application/json" }
+		{ "file", js.dump(2), uploadState.pack_code + ".json", "application/json" }
 	};
 
 	auto res = cli.Post("/api/rocket-league/teamtraining/upload", items);
-	// TODO: Remove fake work
-	for (int i = 0; i < 5; i++) {
-		boost::this_thread::sleep_for(boost::chrono::seconds(1));
-		uploadState.progress = uploadState.progress + 0.15f;
-	}
 	if (res) {
 		if (res->status == 200) {
+			// TODO: Have server return new uploadID, add to the json, then rewrite the training pack file
 			cvarManager->log("Upload successful");
 			uploadState.progress = 1;
 		}
@@ -710,44 +780,68 @@ void TeamTrainingPlugin::uploadPackThread()
 void TeamTrainingPlugin::UploadPack(const TrainingPack &pack)
 {
 	uploadState.newPack(pack);
-	boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
-}
-
-void TeamTrainingPlugin::AddSearchFilters(SearchFilterState& filterState, string idPrefix, std::function<void(SearchFilterState& filters)> searchCallback)
-{
-	ImGui::TextWrapped("Search drills with filter options");
-	if (ImGui::InputInt(("Offensive players##" + idPrefix + "Offense").c_str(), &filterState.offense, ImGuiInputTextFlags_CharsDecimal)) {
-		filterState.offense = (filterState.offense < 0) ? 0 : filterState.offense;
-	}
-	if (ImGui::InputInt(("Defensive players##" + idPrefix + "Defense").c_str(), &filterState.defense, ImGuiInputTextFlags_CharsDecimal)) {
-		filterState.defense = (filterState.defense < 0) ? 0 : filterState.defense;
-	}
-	ImGui::InputText(("Description##" + idPrefix + "Description").c_str(), searchState.filters.description, IM_ARRAYSIZE(searchState.filters.description));
-	ImGui::InputText(("Creator##" + idPrefix + "Creator").c_str(), searchState.filters.creator, IM_ARRAYSIZE(searchState.filters.creator));
-	ImGui::InputText(("Training Pack Code##" + idPrefix + "Code").c_str(), searchState.filters.code, IM_ARRAYSIZE(searchState.filters.code));
-
-	ImGui::Text("Labels: %s", boost::algorithm::join(filterState.tagsState.GetEnabledTags(), ", ").c_str());
-	
-	if (ImGui::Button(("Edit Labels##" + idPrefix + "EditLabels").c_str())) {
-		if (!filterState.tagsState.has_downloaded) {
-			filterState.tagsState.refresh();
-			boost::thread t{ &TeamTrainingPlugin::downloadTagsThread, this, boost::ref(filterState) };
+	gameWrapper->Execute([=](GameWrapper *gw) {
+		auto name = gw->GetPlayerName();
+		uploadState.uploader = "";
+		if (!name.IsNull()) {
+			uploadState.uploader = name.ToString();
 		}
-		ImGui::OpenPopup("Edit Labels");
-	}
-	ShowTagsWindow(filterState);
+		uploadState.uploaderID = gw->GetEpicID();
+		boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
+		});
+}
 
-	if (ImGui::Button(("Search##" + idPrefix + "SearchButton").c_str())) {
-		searchCallback(filterState);
+void TeamTrainingPlugin::AddSearchFilters(
+	SearchFilterState& filterState, string idPrefix, bool alwaysShowSearchButton,
+	std::function<void(SearchFilterState& filters)> tagLoader,
+	std::function<void(SearchFilterState& filters)> searchCallback)
+{
+	if (ImGui::CollapsingHeader("Search Filters")) {
+		if (ImGui::InputInt(("Offensive players##" + idPrefix + "Offense").c_str(), &filterState.offense, ImGuiInputTextFlags_CharsDecimal)) {
+			filterState.offense = (filterState.offense < 0) ? 0 : filterState.offense;
+		}
+		if (ImGui::InputInt(("Defensive players##" + idPrefix + "Defense").c_str(), &filterState.defense, ImGuiInputTextFlags_CharsDecimal)) {
+			filterState.defense = (filterState.defense < 0) ? 0 : filterState.defense;
+		}
+		ImGui::InputText(("Description##" + idPrefix + "Description").c_str(), filterState.description, IM_ARRAYSIZE(filterState.description));
+		ImGui::InputText(("Creator##" + idPrefix + "Creator").c_str(), filterState.creator, IM_ARRAYSIZE(filterState.creator));
+		ImGui::InputText(("Training Pack Code##" + idPrefix + "Code").c_str(), filterState.code, IM_ARRAYSIZE(filterState.code));
+
+		ImGui::Text("Tags: %s", boost::algorithm::join(filterState.tagsState.GetEnabledTags(), ", ").c_str());
+
+		if (ImGui::Button(("Edit Tags##" + idPrefix + "EditTags").c_str())) {
+			if (!filterState.tagsState.has_downloaded) {
+				filterState.tagsState.refresh();
+				boost::thread t{ tagLoader, boost::ref(filterState) };
+			}
+			filterState.tagsState.beforeEditEnabledTags = filterState.tagsState.GetEnabledTags();
+			ImGui::OpenPopup("Edit Tags");
+		}
+		ShowTagsWindow(filterState, tagLoader);
+
+		if (ImGui::Button(("Search##" + idPrefix + "SearchButton").c_str())) {
+			searchCallback(filterState);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(("Clear Filters##" + idPrefix + "ClearFilters").c_str())) {
+			filterState.clear();
+		}
+
+		ImGui::Separator();
+	}
+	else if (alwaysShowSearchButton) {
+		if (ImGui::Button(("Search##" + idPrefix + "SearchButton").c_str())) {
+			searchCallback(filterState);
+		}
 	}
 }
 
-void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state)
+void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state, std::function<void(SearchFilterState& filters)> tagLoader)
 {
 	ImGui::SetNextWindowSizeConstraints(ImVec2(55 + 250 + 55 + 250 + 80 + 100, 600), ImVec2(FLT_MAX, FLT_MAX));
-	if (ImGui::BeginPopupModal("Edit Labels", NULL)) {
+	if (ImGui::BeginPopupModal("Edit Tags", NULL)) {
 		if (state.tagsState.is_downloading) {
-			ImGui::Text("Retrieving Labels from Server");
+			ImGui::Text("Retrieving tags from the server");
 			ImGui::SetCursorPos((ImGui::GetWindowSize() - ImVec2(30, 30)) * ImVec2(0.5f, 0.25f));
 			ImGui::Spinner("Retrieving...", 30, 5);
 		}
@@ -762,7 +856,7 @@ void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state)
 			if (showRetry) {
 				if (ImGui::Button("Retry", ImVec2(120, 0))) {
 					state.tagsState.retry();
-					boost::thread t{ &TeamTrainingPlugin::downloadTagsThread, this, boost::ref(state) };
+					boost::thread t{ tagLoader, boost::ref(state) };
 				}
 				if (ImGui::Button("Cancel", ImVec2(120, 0))) {
 					state.tagsState.cancel();
@@ -801,7 +895,7 @@ void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state)
 		ImGui::SameLine();
 		if (ImGui::Button("Refresh Tags")) {
 			state.tagsState.refresh();
-			boost::thread t{ &TeamTrainingPlugin::downloadTagsThread, this, boost::ref(state) };
+			boost::thread t{ tagLoader, boost::ref(state) };
 		}
 
 		ImGui::EndPopup();

@@ -2,22 +2,21 @@
 
 #include <fstream>
 #include <sstream>
-#include <Windows.h>
 
 TrainingPack::TrainingPack() : TrainingPack(fs::path()) {};
 
 
 TrainingPack::TrainingPack(fs::path filepath, int offense, int defense, std::string description, std::string creator, std::string code,
 	std::string creatorID, std::vector<std::string> tags, int num_drills) :
-	filepath(filepath.string()), offense(offense), defense(defense), description(description), creator(creator), code(code),
+	filepath(filepath), offense(offense), defense(defense), description(description), creator(creator), code(code),
 	creatorID(creatorID), uploader(""), uploaderID(""), uploadID(NO_UPLOAD_ID), expected_drills(num_drills), players_added(0)
 {
 	for (auto tag : tags) {
-		this->tags.push_back(tag);
+		this->tags.insert(tag);
 	}
 }
 
-TrainingPack::TrainingPack(fs::path filepath) : filepath(filepath.string()), version(0), offense(0), defense(0), description(""), creator(""), code(""),
+TrainingPack::TrainingPack(fs::path filepath) : filepath(filepath), version(0), offense(0), defense(0), description(""), creator(""), code(""),
 	creatorID(""), uploader(""), uploaderID(""), uploadID(NO_UPLOAD_ID), expected_drills(0)
 {
 	load_time = std::chrono::system_clock::now();
@@ -141,6 +140,16 @@ bool TrainingPack::expectingMoreDrills()
 	return (drills.size() < expected_drills);
 }
 
+void TrainingPack::addTag(std::string tag)
+{
+	tags.insert(tag);
+}
+
+void TrainingPack::removeTag(std::string tag)
+{
+	tags.erase(tag);
+}
+
 
 /*
  *	Serialization & Deserialization Stuff
@@ -182,10 +191,9 @@ void from_json(const json& j, TrainingPack& p)
 			j.at("uploadID").get_to(p.uploadID);
 		}
 
-
-		p.tags = std::vector<std::string>();
+		p.tags = std::unordered_set<std::string>();
 		for (json tag : j["tags"]) {
-			p.tags.push_back(tag.get<std::string>());
+			p.tags.insert(tag.get<std::string>());
 		}
 	}
 

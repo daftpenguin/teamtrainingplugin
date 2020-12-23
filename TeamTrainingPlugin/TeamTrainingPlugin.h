@@ -16,8 +16,10 @@
 
 #include <boost/thread/mutex.hpp>
 #include <boost/noncopyable.hpp>
+#include <filesystem>
 
 using namespace std;
+namespace fs = std::filesystem;
 
 constexpr auto PLUGIN_VERSION = "0.2.8";
 constexpr auto SERVER_URL = "http://localhost:8000"; // TODO: Make this a cvar?
@@ -165,11 +167,13 @@ public:
 class DownloadState : private boost::noncopyable
 {
 public:
-	DownloadState() : is_downloading(false), failed(false), cancelled(false), progress(0), error(""), pack_code(""), mutex() {};
+	DownloadState() : is_downloading(false), failed(false), cancelled(false), progress(0), error(""), pack_id(NO_UPLOAD_ID), pack_description(""), mutex() {};
 
-	void newPack(string code) {
+	void newPack(int id, string code, string description) {
 		resetState();
+		pack_id = id;
 		pack_code = code;
+		pack_description = description;
 		is_downloading = true;
 	}
 
@@ -186,7 +190,9 @@ public:
 	bool cancelled;
 	float progress;
 	string error;
+	int pack_id;
 	string pack_code;
+	string pack_description;
 	boost::mutex mutex;
 };
 
@@ -220,6 +226,33 @@ public:
 	string uploaderID;
 	string uploader;
 	boost::mutex mutex;
+};
+
+class UploadFavoritesState : private boost::noncopyable
+{
+public:
+	UploadFavoritesState() : was_started(false), is_running(false), failed(false), cancelled(false), progress(0), error("") {};
+
+	void resetState() {
+		was_started = false;
+		is_running = false;
+		failed = false;
+		cancelled = false;
+		progress = 0;
+		error = "";
+		packsInProgress.clear();
+		packsCompleted.clear();
+	}
+
+	bool was_started;
+	bool is_running;
+	bool failed;
+	bool cancelled;
+	float progress;
+	string error;
+
+	unordered_set<string> packsInProgress;
+	unordered_set<string> packsCompleted;
 };
 
 class TeamTrainingPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginWindow
@@ -338,19 +371,29 @@ private:
 		std::function<void(SearchFilterState& filters)> tagLoader,
 		std::function<void(SearchFilterState& filters)> searchCallback);
 	void filterLocalPacks(SearchFilterState& filters);
+	
 	void searchPacksThread(SearchFilterState& filters);
 	void SearchPacks(SearchFilterState& filters);
-	void downloadTagsThread(SearchFilterState& filters);
-	void loadLocalTagsThread(SearchFilterState& filters);
-	void downloadPackThread();
-	void DownloadPack(std::string code);
+	
+	void downloadPackThread(bool isRetry);
+	void DownloadPack(TrainingPackDBMetaData& pack);
+	void ShowDownloadingModal();
+
 	void uploadPackThread();
 	void UploadPack(const TrainingPack& pack);
-	void ShowLoadingModals();
+	void ShowUploadingModal();
+
+	void loadLocalTagsThread(SearchFilterState& filters);
+	void downloadTagsThread(SearchFilterState& filters);
 	void ShowTagsWindow(SearchFilterState& state, std::function<void(SearchFilterState& filters)> tagLoader);
+
+	void ShowFavoritedPacksWindow();
+	void UploadFavoritedPacks();
+	void FavoritedPacksUploadThread();
 
 	DownloadState downloadState;
 	UploadState uploadState;
+	UploadFavoritesState uploadFavsState;
 };
 
 void to_json(json& j, const SearchFilterState& s);

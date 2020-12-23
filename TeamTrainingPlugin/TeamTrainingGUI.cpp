@@ -35,6 +35,18 @@ int filenameFilter(ImGuiTextEditCallbackData* data) {
 	}
 }
 
+void copyToClipboard(string data)
+{
+	const size_t len = data.size();
+	HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, len);
+	memcpy(GlobalLock(hMem), data.c_str(), len);
+	GlobalUnlock(hMem);
+	OpenClipboard(0);
+	EmptyClipboard();
+	SetClipboardData(CF_TEXT, hMem);
+	CloseClipboard();
+}
+
 void TeamTrainingPlugin::Render()
 {
 	if (!this->isWindowOpen) {
@@ -51,8 +63,6 @@ void TeamTrainingPlugin::Render()
 		ImGui::End();
 		return;
 	}
-
-	ShowLoadingModals();
 	
 	if (ImGui::BeginTabBar("Team Training", ImGuiTabBarFlags_None)) {
 		if (ImGui::BeginTabItem("Selection")) {
@@ -81,6 +91,12 @@ void TeamTrainingPlugin::Render()
 			if (ImGui::Button("Reload Packs")) {
 				packs.clear();
 			}
+			ImGui::SameLine();
+			if (ImGui::Button("Add Favorited Training Packs")) {
+				ImGui::OpenPopup("Add Favorited Packs");
+				cvarManager->log("opening favorited packs");
+			}
+			ShowFavoritedPacksWindow();
 
 			if (packs.size() == 0) {
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
@@ -124,26 +140,31 @@ void TeamTrainingPlugin::Render()
 				ImGui::BeginGroup();
 
 				if (pack.errorMsg == "") {
-					if (ImGui::Button("Load Team Training Pack")) {
-						errorMsgs["Selection"].clear();
+					if (pack.drills.size() > 0) {
+						if (ImGui::Button("Load Team Training Pack")) {
+							errorMsgs["Selection"].clear();
 
-						if (!gameWrapper->IsInFreeplay()) {
-							errorMsgs["Selection"].push_back("You must be in a freeplay session to load a training pack. Use Rocket plugin to launch a multiplayer freeplay session with non-local players.");
-						}
-						else {
-							auto cars = gameWrapper->GetGameEventAsServer().GetCars();
-							if (cars.Count() < pack.offense) {
-								errorMsgs["Selection"].push_back("Pack requires " + std::to_string(pack.offense) + " players but there are only " + std::to_string(cars.Count()) + " in the lobby.");
+							if (!gameWrapper->IsInFreeplay()) {
+								errorMsgs["Selection"].push_back("You must be in a freeplay session to load a training pack. Use Rocket plugin to launch a multiplayer freeplay session with non-local players.");
 							}
-						}
+							else {
+								auto cars = gameWrapper->GetGameEventAsServer().GetCars();
+								if (cars.Count() < pack.offense) {
+									errorMsgs["Selection"].push_back("Pack requires " + std::to_string(pack.offense) + " players but there are only " + std::to_string(cars.Count()) + " in the lobby.");
+								}
+							}
 
-						if (errorMsgs["Selection"].size() == 0) {
-							cvarManager->executeCommand("sleep 1; team_train_load " + pack.code);
-						}
+							if (errorMsgs["Selection"].size() == 0) {
+								cvarManager->executeCommand("sleep 1; team_train_load " + pack.code);
+							}
 
+						}
 					}
+
 					if (pack.code != "") {
-						ImGui::SameLine();
+						if (pack.drills.size() > 0) {
+							ImGui::SameLine();
+						}
 						if (ImGui::Button("Load Custom Training Pack")) {
 							cvarManager->executeCommand("sleep 1; load_training " + pack.code);
 						}
@@ -157,22 +178,31 @@ void TeamTrainingPlugin::Render()
 					ImGui::Text("Description: %s", pack.description.c_str());
 					ImGui::Text("Offensive Players: %d", pack.offense);
 					ImGui::Text("Defensive Players: %d", pack.defense);
-					ImGui::Text("Drills: %d", pack.drills.size());
-					ImGui::Text("Code: %s", pack.code.c_str());
-					ImGui::Text("Filepath: %s", pack.filepath.c_str());
-					ImGui::Text("Tags: %s", boost::algorithm::join(pack.tags, ", ").c_str());
+					ImGui::Text("Drills: %d", pack.numDrills);
+					ImGui::TextWrapped("Code: %s", pack.code.c_str());
+					if (!pack.notes.empty()) ImGui::TextWrapped("Notes: %s", pack.notes.c_str());
+					if (!pack.youtube.empty()) {
+						ImGui::TextWrapped("Youtube: %s", pack.youtube.c_str());
+						ImGui::SameLine();
+						if (ImGui::Button("Copy to Clipboard")) {
+							copyToClipboard(pack.youtube);
+						}
+					}
+					ImGui::TextWrapped("Filepath: %s", pack.filepath.string().c_str());
+					ImGui::TextWrapped("Tags: %s", boost::algorithm::join(pack.tags, ", ").c_str());
 
 					ImGui::Separator();
 
-					if (pack.uploadID == NO_UPLOAD_ID) {
+					if (pack.uploadID == NO_UPLOAD_ID && pack.drills.size() > 0) { // Don't allow uploading of custom training metadata this way
 						if (ImGui::Button("Upload")) {
 							UploadPack(pack);
 						}
+						ShowUploadingModal();
+						ImGui::SameLine();
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+						ImGui::TextWrapped("Warning: Double check your tags, description, etc as you cannot currently upload updated versions of training packs.");
+						ImGui::PopStyleColor();
 					}
-					ImGui::SameLine();
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-					ImGui::TextWrapped("Warning: Double check your tags, description, etc as you cannot currently upload updated versions of training packs.");
-					ImGui::PopStyleColor();
 
 					ImGui::EndChild();
 				}
@@ -233,8 +263,8 @@ void TeamTrainingPlugin::Render()
 				ImGui::BeginGroup();
 
 				if (ImGui::Button("Download##BySearch")) {
-					cvarManager->log("Downloading pack with code: " + pack.code);
-					DownloadPack(pack.code);
+					cvarManager->log("Downloading pack with ID: " + pack.id);
+					DownloadPack(pack);
 				}
 				if (pack.code != "") {
 					ImGui::SameLine();
@@ -242,6 +272,7 @@ void TeamTrainingPlugin::Render()
 						cvarManager->executeCommand("sleep 1; load_training " + string(pack.code));
 					}
 				}
+				ShowDownloadingModal();
 
 				ImGui::BeginChild("Training Pack Details", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below us
 
@@ -584,8 +615,6 @@ void TeamTrainingPlugin::searchPacksThread(SearchFilterState& filters)
 	json j(filters);
 	j["type"] = "packs";
 
-	cvarManager->log(j.dump());
-
 	httplib::Client cli(SERVER_URL);
 	if (auto res = cli.Post(url.c_str(), j.dump(), "application/json")) {
 		if (res->status == 200) {
@@ -601,6 +630,7 @@ void TeamTrainingPlugin::searchPacksThread(SearchFilterState& filters)
 
 			for (json jsPack : js) {
 				TrainingPackDBMetaData pack;
+				pack.id = jsPack["id"].get<int>();
 				pack.code = jsPack["code"].get<string>();
 				pack.description = jsPack["description"].get<string>();
 				pack.creator = jsPack["creator_name"].get<string>();
@@ -610,7 +640,6 @@ void TeamTrainingPlugin::searchPacksThread(SearchFilterState& filters)
 				pack.downloads = jsPack["downloads"].get<int>();
 				for (json tag : jsPack["tags"]) {
 					pack.tags.insert(tag.get<std::string>());
-					cvarManager->log(tag.get<std::string>());
 				}
 				searchState.packs.push_back(pack);
 			}
@@ -696,12 +725,17 @@ void TeamTrainingPlugin::loadLocalTagsThread(SearchFilterState& state)
 	state.tagsState.has_downloaded = true;
 }
 
-void TeamTrainingPlugin::downloadPackThread()
+void TeamTrainingPlugin::downloadPackThread(bool isRetry)
 {
-	fs::path fpath = getPackDataPath(code);
+	string fname = "packid-" + to_string(downloadState.pack_id);
+	if (!downloadState.pack_code.empty()) {
+		fname = downloadState.pack_code;
+	}
+	fs::path fpath = getPackDataPath(fname);
 
-	if (fs::exists(fpath)) {
-		// TODO: Set error message
+	if (!isRetry && fs::exists(fpath)) {
+		downloadState.failed = true;
+		downloadState.error = "You may have already downloaded this training pack as the filename " + fpath.filename().string() + " already exists. Click retry if you would like to download the training pack anyways and overwrite this file.";
 		return;
 	}
 
@@ -710,7 +744,7 @@ void TeamTrainingPlugin::downloadPackThread()
 	httplib::Client cli(SERVER_URL);
 
 	stringstream url;
-	url << "/api/rocket-league/teamtraining/download?code=" << downloadState.pack_code;
+	url << "/api/rocket-league/teamtraining/download?id=" << downloadState.pack_id;
 
 	ofstream outfile(fpath);
 
@@ -728,10 +762,11 @@ void TeamTrainingPlugin::downloadPackThread()
 	outfile.close();
 }
 
-void TeamTrainingPlugin::DownloadPack(string code)
+void TeamTrainingPlugin::DownloadPack(TrainingPackDBMetaData& pack)
 {
-	downloadState.newPack(code);
-	boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this };
+	downloadState.newPack(pack.id, pack.code, pack.description);
+	ImGui::OpenPopup("Downloading");
+	boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this, false };
 	packs.clear(); // so we reload the packs next time selection tab is loaded
 }
 
@@ -789,6 +824,7 @@ void TeamTrainingPlugin::UploadPack(const TrainingPack &pack)
 		uploadState.uploaderID = gw->GetEpicID();
 		boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
 		});
+	ImGui::OpenPopup("Uploading");
 }
 
 void TeamTrainingPlugin::AddSearchFilters(
@@ -838,7 +874,7 @@ void TeamTrainingPlugin::AddSearchFilters(
 
 void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state, std::function<void(SearchFilterState& filters)> tagLoader)
 {
-	ImGui::SetNextWindowSizeConstraints(ImVec2(55 + 250 + 55 + 250 + 80 + 100, 600), ImVec2(FLT_MAX, FLT_MAX));
+	ImGui::SetNextWindowSizeConstraints(ImVec2(790, 600), ImVec2(FLT_MAX, FLT_MAX));
 	if (ImGui::BeginPopupModal("Edit Tags", NULL)) {
 		if (state.tagsState.is_downloading) {
 			ImGui::Text("Retrieving tags from the server");
@@ -902,16 +938,179 @@ void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state, std::function<
 	}
 }
 
-void TeamTrainingPlugin::ShowLoadingModals()
+void TeamTrainingPlugin::ShowFavoritedPacksWindow()
+{
+	UploadFavoritesState& state = uploadFavsState;
+	ImGui::SetNextWindowSizeConstraints(ImVec2(600, 200), ImVec2(FLT_MAX, FLT_MAX));
+	if (ImGui::BeginPopupModal("Add Favorited Packs", NULL)) {
+		if (state.was_started) {
+			if (state.is_running) {
+				size_t completed = state.packsCompleted.size();
+				size_t inProgress = state.packsInProgress.size();
+				ImGui::TextWrapped(("Processing: " + to_string(completed) + " of " + to_string(inProgress + completed) + " packs completed").c_str());
+				ImGui::ProgressBar(uploadState.progress, ImVec2(300, 0));
+			}
+
+			if (!state.error.empty()) {
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+				ImGui::TextWrapped(state.error.c_str());
+				ImGui::PopStyleColor();
+			}
+
+			bool showOk = state.packsInProgress.size() == 0;
+			bool showRetry = state.failed;
+			
+			if (showOk) {
+				if (ImGui::Button("Ok", ImVec2(120, 0))) {
+					state.resetState();
+					ImGui::CloseCurrentPopup();
+					ImGui::SameLine();
+				}
+			}
+			else if (showRetry) {
+				if (ImGui::Button("Retry", ImVec2(120, 0))) {
+					UploadFavoritedPacks();
+				}
+				ImGui::SameLine();
+			}
+			else {
+				ImGui::Indent(120);
+			}
+
+			if (!showOk) {
+				if (ImGui::Button("Stop", ImVec2(120, 0))) {
+					state.resetState();
+					ImGui::CloseCurrentPopup();
+				}
+			}
+		}
+		else {
+			ImGui::TextWrapped("In order to add your favorited training packs, any packs the server does not have data about will need to uploaded to the server to be processed.");
+			ImGui::TextWrapped("Clicking the Start button will begin the process of retrieving the data about known packs, and uploading any unknown packs.");
+			ImGui::TextWrapped("This process may be cancelled and resumed later.");
+
+			if (ImGui::Button("Start")) {
+				UploadFavoritedPacks();
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Cancel")) {
+				ImGui::CloseCurrentPopup();
+			}
+		}
+		ImGui::EndPopup();
+	}
+}
+
+void TeamTrainingPlugin::UploadFavoritedPacks()
+{
+	// This was meant to be used to set the favorites director inside of uploadFavsState, but couldn't figure out how to get that directory...
+	boost::thread t{ &TeamTrainingPlugin::FavoritedPacksUploadThread, this };
+}
+
+void TeamTrainingPlugin::FavoritedPacksUploadThread()
+{
+	UploadFavoritesState& state = uploadFavsState;
+	state.resetState();
+	state.is_running = true;
+	state.was_started = true;
+
+	//C:\Users\monsi\Documents\My Games\Rocket League\TAGame\Training
+
+	char* userprofile = getenv("USERPROFILE");
+	if (!userprofile) {
+		state.error = "Failed to get user directory. USERPROFILE does not seem to be set?";
+		state.failed = true;
+		return;
+	}
+
+	fs::path trainingDir = fs::path(userprofile) / "Documents" / "My Games" / "Rocket League" / "TAGame" / "Training";
+
+	cvarManager->log("Upload packs from: " + trainingDir.string());
+	for (const auto& userTrainingDir : fs::directory_iterator(trainingDir)) {
+		fs::path favDir = userTrainingDir.path() / "Favorities"; // LMAO
+		if (fs::exists(favDir)) {
+			for (const auto& pack : fs::directory_iterator(favDir)) {
+				if (pack.path().has_extension() && pack.path().extension() == ".Tem") {
+					cvarManager->log("Uploading pack: " + pack.path().string());
+					state.packsInProgress.insert(pack.path().string());
+				}
+			}
+		}
+	}
+
+	// Retrieve data about known packs
+	std::string url = "/api/rocket-league/teamtraining/search";
+
+	std::vector<string> packFNames;
+	packFNames.reserve(state.packsInProgress.size());
+	for (auto it = state.packsInProgress.begin(); it != state.packsInProgress.end(); ++it) {
+		packFNames.push_back(fs::path(*it).stem().string());
+	}
+
+	json j;
+	j["type"] = "favorites";
+	j["packFNames"] = packFNames;	
+
+	cvarManager->log(j.dump());
+
+	map<string, int> availablePacks;
+
+	httplib::Client cli(SERVER_URL);
+	if (auto res = cli.Post(url.c_str(), j.dump(), "application/json")) {
+		if (res->status == 200) {
+			json js;
+			try {
+				js = json::parse(res->body);
+			}
+			catch (...) {
+				cvarManager->log(res->body);
+				state.failed = true;
+				state.error = "Error parsing favorites search response from server";
+				return;
+			}
+
+			for (json jsPack : js) {
+				string packFName = jsPack["packFName"].get<string>();
+				int id = jsPack["id"].get<int>();
+				availablePacks[packFName] = id;
+			}
+		}
+		else {
+			cvarManager->log(res->body);
+			state.is_running = false;
+			state.failed = true;
+			state.error = res->body;
+		}
+	}
+	else {
+		cvarManager->log("Failed to reach host");
+		state.is_running = false;
+		state.failed = true;
+		state.error = "Failed to reach host";
+	}
+
+	if (state.failed) {
+		return;
+	}
+
+	// Upload unknown packs
+	// TODO: Finish implementation
+	for (auto it = state.packsInProgress.begin(); it != state.packsInProgress.end(); ++it) {
+		packFNames.push_back(fs::path(*it).stem().string());
+	}
+
+	// Download data for all packs given their IDs
+}
+
+void TeamTrainingPlugin::ShowUploadingModal()
 {
 	// TODO: Use OpenPopup properly
 	if (uploadState.is_uploading) {
-		ImGui::OpenPopup("Uploading");
 		if (ImGui::BeginPopupModal("Uploading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
 			ImGui::Text(("Uploading: " + uploadState.pack_code).c_str());
-			ImGui::ProgressBar(uploadState.progress);
+			ImGui::ProgressBar(uploadState.progress, ImVec2(300, 0));
 
-			if (uploadState.error != "") {
+			if (!uploadState.error.empty()) {
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
 				ImGui::TextWrapped(uploadState.error.c_str());
 				ImGui::PopStyleColor();
@@ -945,40 +1144,51 @@ void TeamTrainingPlugin::ShowLoadingModals()
 			}
 			ImGui::EndPopup();
 		}
-		ImGui::CloseCurrentPopup();
 	}
+}
 
-	// TODO: Missing EndPopup?
-	if (downloadState.is_downloading) {
-		ImGui::OpenPopup("Downloading");
-		if (ImGui::BeginPopupModal("Downloading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-			ImGui::Text(("Downloading: " + downloadState.pack_code).c_str());
-			ImGui::ProgressBar(downloadState.progress);
+void TeamTrainingPlugin::ShowDownloadingModal() {
+	//ImGui::SetNextWindowSizeConstraints(ImVec2(400, 200), ImVec2(FLT_MAX, FLT_MAX));
+	if (ImGui::BeginPopupModal("Downloading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+		ImGui::Text(("Downloading: " + downloadState.pack_description).c_str());
+		ImGui::ProgressBar(downloadState.progress, ImVec2(300, 0));
 
-			if (downloadState.error != "") {
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-				ImGui::TextWrapped(downloadState.error.c_str());
-				ImGui::PopStyleColor();
-			}
+		if (!downloadState.error.empty()) {
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+			ImGui::TextWrapped(downloadState.error.c_str());
+			ImGui::PopStyleColor();
+		}
 
-			bool showOk = downloadState.progress >= 1;
-			bool showRetry = downloadState.failed;
-			if (showOk) {
-				if (ImGui::Button("Ok", ImVec2(120, 0))) {
-					downloadState.is_downloading = false;
-				}
-				ImGui::SameLine();
+		bool showOk = downloadState.progress >= 1;
+		bool showRetry = downloadState.failed;
+		if (showOk) {
+			if (ImGui::Button("Ok", ImVec2(120, 0))) {
+				downloadState.is_downloading = false;
+				ImGui::CloseCurrentPopup();
 			}
-			else if (showRetry) {
-				if (ImGui::Button("Retry", ImVec2(120, 0))) {
-					downloadState.resetState();
-					boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this };
-				}
-			}
-			else {
-				ImGui::Indent(120);
+			ImGui::SameLine();
+		}
+		else if (showRetry) {
+			if (ImGui::Button("Retry", ImVec2(120, 0))) {
+				downloadState.resetState();
+				boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this, true };
 			}
 		}
+		else {
+			ImGui::Indent(120);
+		}
+
+		if (!showOk) {
+			if (showRetry) {
+				ImGui::SameLine();
+			}
+			if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+				downloadState.cancelled = true;
+				ImGui::CloseCurrentPopup();
+			}
+		}
+
+		ImGui::EndPopup();
 	}
 }
 

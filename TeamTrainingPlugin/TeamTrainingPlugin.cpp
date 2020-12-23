@@ -89,20 +89,6 @@ void TeamTrainingPlugin::onLoad()
 
 	gameWrapper->LoadToastTexture("teamtraining1", gameWrapper->GetDataFolder() / "assets" / "teamtraining_logo.png");
 
-	cvarManager->registerNotifier("team_train_test", [&, &_cvarManager = cvarManager](vector<string> params) {
-		cvarManager->log("Running test");
-		httplib::Client cli(SERVER_URL);
-		if (auto res = cli.Get("/api/rocket-league/teamtraining/search?type=packs")) {
-			if (res->status == 200) {
-				cvarManager->log(res->body);
-			}
-			else {
-				cvarManager->log(res->body);
-			}
-		}
-
-		}, "test command for dev", PERMISSION_ALL);
-
 	/*gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
 		"Function TAGame.GameEvent_TA.AddCar",
 		std::bind(&TeamTrainingPlugin::onPlayerLeave, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));

@@ -191,15 +191,31 @@ void from_json(const json& j, TrainingPack& p)
 			j.at("uploadID").get_to(p.uploadID);
 		}
 
+		if (j.find("notes") != j.end()) {
+			j.at("notes").get_to(p.notes);
+		}
+
+		if (j.find("youtube") != j.end()) {
+			j.at("youtube").get_to(p.youtube);
+		}
+
 		p.tags = std::unordered_set<std::string>();
-		for (json tag : j["tags"]) {
-			p.tags.insert(tag.get<std::string>());
+		if (j.find("tags") != j.end()) {
+			for (json tag : j["tags"]) {
+				p.tags.insert(tag.get<std::string>());
+			}
 		}
 	}
 
 	p.drills = std::vector<TrainingPackDrill>();
-	for (json drill : j["drills"]) {
-		p.drills.push_back(drill.get<TrainingPackDrill>());
+	if (j.find("drills") != j.end() && j["drills"].size() > 0) { // Could just be custom training metadata
+		for (json drill : j["drills"]) {
+			p.drills.push_back(drill.get<TrainingPackDrill>());
+		}
+		p.numDrills = p.drills.size();
+	}
+	else {
+		p.numDrills = j["numDrills"];
 	}
 }
 
@@ -212,15 +228,20 @@ void to_json(json& j, const TrainingPack& p)
 		j["creator"] = p.creator;
 		j["code"] = p.code;
 	}
-	if (p.version >= 3) {
+	if (p.version >= 4) {
 		j["creatorID"] = p.creatorID;
-		j["uploader"] = p.uploader;
-		j["uploaderID"] = p.uploaderID;
-		j["uploadID"] = p.uploadID;
-		j["tags"] = json(p.tags);
+		if (!p.uploader.empty()) j["uploader"] = p.uploader;
+		if (!p.uploaderID.empty()) j["uploaderID"] = p.uploaderID;
+		if (p.uploadID != NO_UPLOAD_ID) j["uploadID"] = p.uploadID;
+		j["numDrills"] = p.numDrills;
+		if (!p.notes.empty()) j["notes"] = p.notes;
+		if (!p.youtube.empty()) j["youtube"] = p.youtube;
+		if (p.tags.size() > 0) j["tags"] = json(p.tags);
 	}
 
-	j["drills"] = json(p.drills);
+	if (p.drills.size() > 0) {
+		j["drills"] = json(p.drills);
+	}
 }
 
 void from_json(const json& j, TrainingPackDrill& d)

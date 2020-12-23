@@ -19,6 +19,7 @@ static constexpr int NO_UPLOAD_ID = -1;
 static constexpr int LATEST_TRAINING_PACK_VERSION = 4;
 
 struct TrainingPackDBMetaData {
+	int id;
 	std::string code;
 	std::string description;
 	std::string creator;
@@ -102,6 +103,9 @@ public:
 	std::string uploaderID;
 	int uploadID;
 	std::unordered_set<std::string> tags;
+	int numDrills;
+	std::string notes;
+	std::string youtube;
 
 	std::vector<TrainingPackDrill> drills;
 

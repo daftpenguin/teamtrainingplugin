@@ -47,6 +47,18 @@ void copyToClipboard(string data)
 	CloseClipboard();
 }
 
+bool isValidPackCode(string code)
+{
+	if (code.length() != 19) return false;
+	vector<string> sections;
+	boost::split(sections, code, boost::is_any_of("-"));
+	if (sections.size() != 4) return false;
+	for (auto& section : sections) {
+		if (section.size() != 4) return false;
+	}
+	return true;
+}
+
 void TeamTrainingPlugin::Render()
 {
 	if (!this->isWindowOpen) {
@@ -96,7 +108,16 @@ void TeamTrainingPlugin::Render()
 				ImGui::OpenPopup("Add Favorited Packs");
 				cvarManager->log("opening favorited packs");
 			}
+			ImGui::SameLine();
+			ImGui::PushItemWidth(200);
+			ImGui::InputText("Code##AddByCode", addByCode, IM_ARRAYSIZE(addByCode));
+			ImGui::PopItemWidth();
+			ImGui::SameLine();
+			if (ImGui::Button("Add By Code")) {
+				AddPackByCode(addByCode);
+			}
 			ShowFavoritedPacksWindow();
+			ShowAddByCodeModal();
 
 			if (packs.size() == 0) {
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
@@ -190,6 +211,9 @@ void TeamTrainingPlugin::Render()
 					}
 					ImGui::TextWrapped("Filepath: %s", pack.filepath.string().c_str());
 					ImGui::TextWrapped("Tags: %s", boost::algorithm::join(pack.tags, ", ").c_str());
+					if (ImGui::Button("Edit Tags##Selection")) {
+
+					}
 
 					ImGui::Separator();
 
@@ -641,7 +665,7 @@ void TeamTrainingPlugin::searchPacksThread(SearchFilterState& filters)
 				for (json tag : jsPack["tags"]) {
 					pack.tags.insert(tag.get<std::string>());
 				}
-				searchState.packs.push_back(pack);
+				searchState.packs.push_back(pack); 
 			}
 
 			searchState.is_searching = false;
@@ -743,12 +767,9 @@ void TeamTrainingPlugin::downloadPackThread(bool isRetry)
 
 	httplib::Client cli(SERVER_URL);
 
-	stringstream url;
-	url << "/api/rocket-league/teamtraining/download?id=" << downloadState.pack_id;
-
 	ofstream outfile(fpath);
 
-	auto res = cli.Get(url.str().c_str(),
+	auto res = cli.Get(("/api/rocket-league/teamtraining/download?id=" + to_string(downloadState.pack_id)).c_str(),
 		[&](const char* data, size_t data_length) {
 			outfile << string(data, data_length);
 			cvarManager->log(string(data, data_length));
@@ -758,8 +779,23 @@ void TeamTrainingPlugin::downloadPackThread(bool isRetry)
 			downloadState.progress = (float) len / (float) total;
 			return downloadState.cancelled == false;
 		});
-
 	outfile.close();
+
+	// TODO: res->body causes issues if status not 200
+	if (res) {
+		if (res->status != 200) {
+			fs::remove(fpath);
+			downloadState.failed = true;
+			cvarManager->log(res->body);
+			downloadState.error = res->body;
+		}
+	}
+	else {
+		fs::remove(fpath);
+		downloadState.failed = true;
+		cvarManager->log("Download failed. Could not reach server.");
+		downloadState.error = "Download failed. Could not reach server.";
+	}
 }
 
 void TeamTrainingPlugin::DownloadPack(TrainingPackDBMetaData& pack)
@@ -788,8 +824,13 @@ void TeamTrainingPlugin::uploadPackThread()
 		return;
 	}
 
+	string fname = fs::path(uploadState.pack_path).filename().string();
+	if (!uploadState.pack_code.empty()) {
+		fname = uploadState.pack_code + ".json";
+	}
+
 	httplib::MultipartFormDataItems items = {
-		{ "file", js.dump(2), uploadState.pack_code + ".json", "application/json" }
+		{ "file", js.dump(2), fname, "application/json" }
 	};
 
 	auto res = cli.Post("/api/rocket-league/teamtraining/upload", items);
@@ -821,7 +862,7 @@ void TeamTrainingPlugin::UploadPack(const TrainingPack &pack)
 		if (!name.IsNull()) {
 			uploadState.uploader = name.ToString();
 		}
-		uploadState.uploaderID = gw->GetEpicID();
+		uploadState.uploaderID = "EPIC:" + gw->GetEpicID();
 		boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
 		});
 	ImGui::OpenPopup("Uploading");
@@ -941,14 +982,14 @@ void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state, std::function<
 void TeamTrainingPlugin::ShowFavoritedPacksWindow()
 {
 	UploadFavoritesState& state = uploadFavsState;
-	ImGui::SetNextWindowSizeConstraints(ImVec2(600, 200), ImVec2(FLT_MAX, FLT_MAX));
+	ImGui::SetNextWindowSizeConstraints(ImVec2(500, 200), ImVec2(FLT_MAX, FLT_MAX));
 	if (ImGui::BeginPopupModal("Add Favorited Packs", NULL)) {
 		if (state.was_started) {
 			if (state.is_running) {
 				size_t completed = state.packsCompleted.size();
 				size_t inProgress = state.packsInProgress.size();
 				ImGui::TextWrapped(("Processing: " + to_string(completed) + " of " + to_string(inProgress + completed) + " packs completed").c_str());
-				ImGui::ProgressBar(uploadState.progress, ImVec2(300, 0));
+				ImGui::ProgressBar(state.progress, ImVec2(ImGui::GetWindowWidth() - 20, 0));
 			}
 
 			if (!state.error.empty()) {
@@ -1014,7 +1055,7 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 	state.is_running = true;
 	state.was_started = true;
 
-	//C:\Users\monsi\Documents\My Games\Rocket League\TAGame\Training
+	// Can't figure out how to get full path to favorited packs directory, so we just get all favorited packs from every user directory inside TAGame/Training
 
 	char* userprofile = getenv("USERPROFILE");
 	if (!userprofile) {
@@ -1024,6 +1065,7 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 	}
 
 	fs::path trainingDir = fs::path(userprofile) / "Documents" / "My Games" / "Rocket League" / "TAGame" / "Training";
+	unordered_set<string> packFNames;
 
 	cvarManager->log("Upload packs from: " + trainingDir.string());
 	for (const auto& userTrainingDir : fs::directory_iterator(trainingDir)) {
@@ -1031,8 +1073,11 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 		if (fs::exists(favDir)) {
 			for (const auto& pack : fs::directory_iterator(favDir)) {
 				if (pack.path().has_extension() && pack.path().extension() == ".Tem") {
-					cvarManager->log("Uploading pack: " + pack.path().string());
-					state.packsInProgress.insert(pack.path().string());
+					if (packFNames.find(pack.path().stem().string()) == packFNames.end()) { // Do only unique .Tem files
+						cvarManager->log("Uploading pack: " + pack.path().string());
+						state.packsInProgress.insert(pack.path().string());
+						packFNames.insert(pack.path().stem().string());
+					}
 				}
 			}
 		}
@@ -1041,19 +1086,14 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 	// Retrieve data about known packs
 	std::string url = "/api/rocket-league/teamtraining/search";
 
-	std::vector<string> packFNames;
-	packFNames.reserve(state.packsInProgress.size());
-	for (auto it = state.packsInProgress.begin(); it != state.packsInProgress.end(); ++it) {
-		packFNames.push_back(fs::path(*it).stem().string());
-	}
-
 	json j;
 	j["type"] = "favorites";
 	j["packFNames"] = packFNames;	
 
 	cvarManager->log(j.dump());
 
-	map<string, int> availablePacks;
+	struct knownPack { int id = NO_UPLOAD_ID; string code; };
+	map<string, struct knownPack> knownPacks;
 
 	httplib::Client cli(SERVER_URL);
 	if (auto res = cli.Post(url.c_str(), j.dump(), "application/json")) {
@@ -1071,84 +1111,522 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 
 			for (json jsPack : js) {
 				string packFName = jsPack["packFName"].get<string>();
-				int id = jsPack["id"].get<int>();
-				availablePacks[packFName] = id;
+				knownPacks[packFName] = knownPack{ jsPack["id"].get<int>(), jsPack["code"].get<string>() };
 			}
 		}
 		else {
-			cvarManager->log(res->body);
 			state.is_running = false;
 			state.failed = true;
 			state.error = res->body;
+			cvarManager->log(state.error);
+			return;
 		}
 	}
 	else {
-		cvarManager->log("Failed to reach host");
 		state.is_running = false;
 		state.failed = true;
 		state.error = "Failed to reach host";
-	}
-
-	if (state.failed) {
+		cvarManager->log(state.error);
 		return;
 	}
 
-	// Upload unknown packs
-	// TODO: Finish implementation
-	for (auto it = state.packsInProgress.begin(); it != state.packsInProgress.end(); ++it) {
-		packFNames.push_back(fs::path(*it).stem().string());
+	if (knownPacks.size() > 0) {
+		stringstream ss;
+		for (auto it = knownPacks.begin(); it != knownPacks.end(); ++it) {
+			ss << it->second.id << ",";
+		}
+		cvarManager->log(to_string(knownPacks.size()) + " known pack(s) identified: " + ss.str());
 	}
 
-	// Download data for all packs given their IDs
+	// Collect fpaths into vector since we're modifying packsInProgress and it's cleaner this way
+	vector<fs::path> packsToProcess;
+	for (auto it = state.packsInProgress.begin(); it != state.packsInProgress.end(); ++it) {
+		packsToProcess.push_back(fs::path(*it));
+	}
+
+	// Download all packs by either uploading unknown packs, or downloading known packs
+	for (auto fpath : packsToProcess) {
+		auto knownIt = knownPacks.find(fpath.stem().string());
+		int pack_id = NO_UPLOAD_ID;
+		string pack_code;
+
+		// If known, set ID and move onto downloading. Otherwise, upload pack, receive ID, then download.
+		if (knownIt != knownPacks.end()) {
+			pack_id = knownIt->second.id;
+			pack_code = knownIt->second.code;
+		}
+		else {
+			cvarManager->log("Uploading pack: " + fpath.string());
+			ifstream fin(fpath, ios::binary);
+			vector<char> buf(istreambuf_iterator<char>(fin), {});
+
+			httplib::MultipartFormDataItems items = {
+			{ "file", string(buf.data(), buf.size()), fpath.filename().string(), "application/octet-stream" }
+			};
+
+			auto res = cli.Post("/api/rocket-league/teamtraining/upload", items);
+			if (res) {
+				if (res->status == 200) {
+					json js;
+					try {
+						js = json::parse(res->body);
+					}
+					catch (...) {
+						cvarManager->log(res->body);
+						state.failed = true;
+						state.error = "Error parsing upload favorited pack response from server";
+						return;
+					}
+
+					if (js.find("id") == js.end() || js.find("code") == js.end()) {
+						state.failed = true;
+						state.error = "Received bad response from server";
+						cvarManager->log(res->body);
+						return;
+					}
+					pack_id = js["id"].get<int>();
+					pack_code = js["code"].get<string>();
+				}
+				else {
+					// TODO: We probably shouldn't full fail here but instead mark pack as failed and continue
+					state.failed = true;
+					state.error = res->body;
+					cvarManager->log(state.error);
+					return;
+				}
+			}
+			else {
+				state.failed = true;
+				state.error = "Upload failed. Could not reach server.";
+				cvarManager->log(state.error);
+				return;
+			}
+		}
+
+		if (pack_id == NO_UPLOAD_ID || pack_code.empty()) {
+			state.failed = true;
+			state.error = "Received invalid pack ID (" + to_string(pack_id) + ") or pack code (" + pack_code + ")";
+			cvarManager->log(state.error);
+			return;
+		}
+
+		fs::path outpath = getPackDataPath(pack_code);
+		if (fs::exists(outpath)) {
+			cvarManager->log("Skipping pack " + pack_code + " since it already exists");
+		}
+		else {
+			cvarManager->log("Downloading pack: " + to_string(pack_id));
+			ofstream outfile(outpath);
+			auto res = cli.Get(("/api/rocket-league/teamtraining/download?id=" + to_string(pack_id)).c_str(),
+				[&](const char* data, size_t data_length) {
+					outfile << string(data, data_length);
+					return state.cancelled == false;
+				});
+			outfile.close();
+
+			// TODO: res->body causes issues if status not 200
+			if (res) {
+				if (res->status == 200) {
+					TrainingPack pack(outpath);
+					pack.addTag("Favorite");
+					pack.save();
+				}
+				else {
+					fs::remove(outpath);
+					state.failed = true;
+					state.error = res->body;
+					cvarManager->log(state.error);
+					return;
+				}
+			}
+			else {
+				fs::remove(outpath);
+				state.failed = true;
+				state.error = "Download failed. Could not reach server.";
+				cvarManager->log(state.error);
+				return;
+			}
+		}
+
+		state.packsCompleted.insert(fpath.string());
+		state.packsInProgress.erase(fpath.string());
+		state.progress = state.packsCompleted.size() / (float) (state.packsCompleted.size() + state.packsInProgress.size());
+	}
+
+	packs.clear(); // Force reload for new packs
+}
+
+void TeamTrainingPlugin::AddPackByCode(string code)
+{
+	boost::to_upper(code);
+	if (!isValidPackCode(code)) {
+		errorMsgs["Selection"].push_back("Invalid pack code");
+		return;
+	}
+
+	downloadState.newPack(NO_UPLOAD_ID, code, "");
+	ImGui::OpenPopup("Add By Code");
+	boost::thread t{ &TeamTrainingPlugin::addPackByCodeThread, this, false };
+}
+
+void TeamTrainingPlugin::addPackByCodeThread(bool isRetry)
+{
+	// Call download by code and save pack if it exists
+	// TODO: Just add a fucking modal. The errorMsgs usage isn't thread safe at all...
+	// TODO: We should really be generalizing some download pack function to use here, in download pack thread, and the add favs thread
+	fs::path fpath = getPackDataPath(downloadState.pack_code);
+
+	if (fs::exists(fpath) && !isRetry) {
+		downloadState.error = "You have already downloaded this pack. Click retry if you would to redownload the pack and overwrite the existing file.";
+		cvarManager->log(fpath.string());
+		cvarManager->log(downloadState.error);
+		downloadState.failed = true;
+		return;
+	}
+
+	downloadState.stage = "Downloading pack from server if it already has it";
+	httplib::Client cli(SERVER_URL);
+	stringstream dataSS;
+
+	bool packExists;
+	auto res = cli.Get(("/api/rocket-league/teamtraining/download?code=" + downloadState.pack_code).c_str(), httplib::Headers(),
+		[&](const httplib::Response& r) {
+			packExists = r.status == 200; // Don't update progress if we're not downloading the pack
+			return true;
+		},
+		[&](const char* data, size_t data_length) {
+			dataSS << string(data, data_length);
+			return downloadState.cancelled == false;
+		},
+		[&](uint64_t len, uint64_t total) {
+			if (packExists) downloadState.progress = (float)len / (float)total;
+			return downloadState.cancelled == false;
+		});
+
+	if (res) {
+		if (res->status == 200) {
+			ofstream outfile(fpath);
+			outfile << dataSS.str();
+			outfile.close();
+			downloadState.stage = "Pack added";
+			packs.clear();
+			return;
+		}
+		else if (res->status != 404) {
+			downloadState.error = dataSS.str();
+			downloadState.failed = true;
+			cvarManager->log(downloadState.error);
+			return;
+		}
+	}
+	else {
+		downloadState.failed = true;
+		downloadState.error = "Could not reach server";
+		cvarManager->log(downloadState.error);
+		return;
+	}
+	
+	// Load training, then get Tem from game and upload to server like adding favs
+	// TODO: Generalize the uploading Tem and downloading pack procedure for adding favs and adding by code
+	downloadState.stage = "Server does not have pack data. Loading training pack in-game to upload it to the server. This will take a few seconds.";
+
+	cvarManager->executeCommand("sleep 1; load_training " + downloadState.pack_code);
+
+	cvarManager->log("Setting timeout");
+
+	gameWrapper->HookEventPost(CUSTOM_TRAINING_LOADED_EVENT, [this](string eventName) {
+		gameWrapper->SetTimeout([this](GameWrapper* gw) { // This code seems to fail sometimes without the timeout
+			if (!gw->IsInCustomTraining()) {
+				downloadState.error = "Failed to load custom training pack. Either code was invalid or Rocket League failed to download the pack from their servers.";
+				cvarManager->log(downloadState.error);
+				downloadState.failed = true;
+				return;
+			}
+
+			auto te = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address);
+			if (te.IsNull()) {
+				downloadState.error = "Failed to get training pack data from game.";
+				cvarManager->log(downloadState.error);
+				downloadState.failed = true;
+				return;
+			}
+
+			auto tdd = te.GetTrainingData().GetTrainingData();
+			auto code = tdd.GetCode();
+			if (code.IsNull()) {
+				downloadState.error = "Failed to get training pack code from game.";
+				cvarManager->log(downloadState.error);
+				downloadState.failed = true;
+				return;
+			}
+
+			if (code.ToString().compare(downloadState.pack_code) != 0) {
+				downloadState.error = "Failed to load custom training pack. Either code was invalid or Rocket League failed to download the pack from their servers.";
+				cvarManager->log(downloadState.error);
+				downloadState.failed = true;
+				return;
+			}
+
+			auto fnameUnreal = te.GetTrainingFileName();
+			if (fnameUnreal.IsNull()) {
+				downloadState.error = "Failed to get training pack file from game.";
+				cvarManager->log(downloadState.error);
+				downloadState.failed = true;
+				return;
+			}
+
+			downloadState.temFName = fnameUnreal.ToString();
+
+			if (downloadState.cancelled) {
+				return;
+			}
+
+			boost::thread t{ &TeamTrainingPlugin::addPackByTemFNameThread, this };
+			}, 1.0f);
+		});
+}
+
+void TeamTrainingPlugin::ShowAddByCodeModal()
+{
+	// TODO: This is nearly an exact copy of the download modal...
+	if (ImGui::BeginPopupModal("Add By Code", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+		if (!downloadState.stage.empty()) {
+			ImGui::TextWrapped(downloadState.stage.c_str());
+		}
+
+		ImGui::ProgressBar(downloadState.progress, ImVec2(300, 0));
+
+		if (!downloadState.error.empty()) {
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+			ImGui::TextWrapped(downloadState.error.c_str());
+			ImGui::PopStyleColor();
+		}
+
+		bool showOk = downloadState.progress >= 1;
+		bool showRetry = downloadState.failed;
+		if (showOk) {
+			if (ImGui::Button("Ok", ImVec2(120, 0))) {
+				downloadState.is_downloading = false;
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+		}
+		else if (showRetry) {
+			if (ImGui::Button("Retry", ImVec2(120, 0))) {
+				downloadState.resetState();
+				boost::thread t{ &TeamTrainingPlugin::addPackByCodeThread, this, true };
+			}
+			ImGui::SameLine();
+		}
+		else {
+			ImGui::Indent(120);
+		}
+
+		if (!showOk) {
+			if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+				downloadState.cancelled = true;
+				downloadState.is_downloading = false;
+				ImGui::CloseCurrentPopup();
+			}
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
+// TODO: Generalize this better and use it in adding favs thread?
+void TeamTrainingPlugin::addPackByTemFNameThread()
+{
+	// If pack is favorited, fname will be "Favorities\something", otherwise it will be "Downloaded\something" (no .Tem)
+	bool isFavorited = downloadState.temFName.find("Favorities") != string::npos;
+
+	char* userprofile = getenv("USERPROFILE");
+	if (!userprofile) {
+		downloadState.error = "Failed to get user directory. USERPROFILE does not seem to be set?";
+		cvarManager->log(downloadState.error);
+		downloadState.failed = true;
+		return;
+	}
+
+	cvarManager->log("Searching for file: " + downloadState.temFName);
+	downloadState.stage = "Searching for training pack file";
+
+	fs::path trainingDir = fs::path(userprofile) / "Documents" / "My Games" / "Rocket League" / "TAGame" / "Training";
+	fs::path fpath;
+	bool fileFound = false;
+	for (const auto& userTrainingDir : fs::directory_iterator(trainingDir)) {
+		fpath = userTrainingDir.path() / (downloadState.temFName + ".Tem");
+		if (fs::exists(fpath)) {
+			if (isFavorited) {
+				fileFound = true;
+				break; // Found pack
+			}
+			// Check timestamp of file
+			auto timestamp = fs::last_write_time(fpath).time_since_epoch();
+			auto now = chrono::system_clock::now();
+			auto secsSinceWrite = chrono::duration_cast<chrono::seconds>(now.time_since_epoch() - timestamp).count();
+			if (secsSinceWrite < MAX_SECONDS_SINCE_TEM_FILE_CREATED) {
+				fileFound = true;
+				break;
+			}
+		}
+	}
+
+	if (!fileFound) {
+		downloadState.error = "Failed to find training pack file in file system.";
+		cvarManager->log(downloadState.error);
+		downloadState.failed = true;
+		return;
+	}
+
+	// Upload the .Tem file
+	cvarManager->log("Uploading pack: " + fpath.string());
+	downloadState.stage = "Uploading training pack to server";
+	ifstream fin(fpath, ios::binary);
+	vector<char> buf(istreambuf_iterator<char>(fin), {});
+
+	string uploadName = (isFavorited ? fpath.filename().string() : downloadState.pack_code + ".Tem");
+	httplib::MultipartFormDataItems items = {
+	{ "file", string(buf.data(), buf.size()), uploadName, "application/octet-stream" }
+	};
+
+	int pack_id = NO_UPLOAD_ID;
+	string pack_code;
+
+	httplib::Client cli(SERVER_URL);
+	auto res = cli.Post("/api/rocket-league/teamtraining/upload", items);
+	if (res) {
+		if (res->status == 200) {
+			json js;
+			try {
+				js = json::parse(res->body);
+			}
+			catch (...) {
+				cvarManager->log(res->body);
+				downloadState.error = "Error parsing upload response from server";
+				downloadState.failed = true;
+				return;
+			}
+
+			if (js.find("id") == js.end() || js.find("code") == js.end()) {
+				downloadState.error = "Received bad response from server";
+				downloadState.failed = true;
+				cvarManager->log(res->body);
+				return;
+			}
+			pack_id = js["id"].get<int>();
+			pack_code = js["code"].get<string>();
+		}
+		else {
+			downloadState.error = res->body;
+			cvarManager->log(downloadState.error);
+			downloadState.failed = true;
+			return;
+		}
+	}
+	else {
+		downloadState.error = "Upload failed. Could not reach server.";
+		cvarManager->log(downloadState.error);
+		downloadState.failed = true;
+		return;
+	}
+
+	if (pack_id == NO_UPLOAD_ID || pack_code.empty()) {
+		downloadState.error = "Received invalid pack ID (" + to_string(pack_id) + ") or pack code (" + pack_code + ")";
+		cvarManager->log(downloadState.error);
+		downloadState.failed = true;
+		return;
+	}
+
+	if (pack_code.compare(downloadState.pack_code) != 0) {
+		downloadState.error = "Oops, something went wrong. The wrong training pack file was uploaded and the pack codes don't match. Given code: " + downloadState.pack_code + ", Uploaded code: " + pack_code;;
+		cvarManager->log(downloadState.error);
+		downloadState.failed = true;
+		return;
+	}
+
+	fs::path outpath = getPackDataPath(pack_code);
+	cvarManager->log("Downloading pack: " + to_string(pack_id));
+	downloadState.stage = "Downloading training pack data from server";
+	ofstream outfile(outpath);
+	auto downRes = cli.Get(("/api/rocket-league/teamtraining/download?id=" + to_string(pack_id)).c_str(),
+		[&](const char* data, size_t data_length) {
+			outfile << string(data, data_length);
+			return true;
+		},
+		[&](uint64_t len, uint64_t total) {
+			downloadState.progress = (float)len / (float)total;
+			return downloadState.cancelled == false;
+		});
+	outfile.close();
+
+	// TODO: res->body causes issues if status not 200
+	if (downRes) {
+		if (downRes->status == 200) {
+			downloadState.stage = "Pack added";
+			packs.clear();
+		}
+		else {
+			fs::remove(outpath);
+			downloadState.error = downRes->body;
+			cvarManager->log(downloadState.error);
+			downloadState.failed = true;
+			return;
+		}
+	}
+	else {
+		fs::remove(outpath);
+		downloadState.error = "Download failed. Could not reach server.";
+		cvarManager->log(downloadState.error);
+		downloadState.failed = true;
+		return;
+	}
 }
 
 void TeamTrainingPlugin::ShowUploadingModal()
 {
-	// TODO: Use OpenPopup properly
-	if (uploadState.is_uploading) {
-		if (ImGui::BeginPopupModal("Uploading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-			ImGui::Text(("Uploading: " + uploadState.pack_code).c_str());
-			ImGui::ProgressBar(uploadState.progress, ImVec2(300, 0));
+	if (ImGui::BeginPopupModal("Uploading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+		ImGui::Text(("Uploading: " + uploadState.pack_description).c_str());
+		ImGui::ProgressBar(uploadState.progress, ImVec2(300, 0));
 
-			if (!uploadState.error.empty()) {
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-				ImGui::TextWrapped(uploadState.error.c_str());
-				ImGui::PopStyleColor();
-			}
-
-			bool showOk = uploadState.progress >= 1;
-			bool showRetry = uploadState.failed;
-			if (showOk) {
-				if (ImGui::Button("Ok", ImVec2(120, 0))) {
-					uploadState.is_uploading = false;
-				}
-				ImGui::SameLine();
-			}
-			else if (showRetry) {
-				if (ImGui::Button("Retry", ImVec2(120, 0))) {
-					uploadState.resetState();
-					boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
-				}
-				ImGui::SameLine();
-			}
-			else {
-				ImGui::Indent(120);
-			}
-
-			if (!showOk) {
-				if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-					uploadState.cancelled = true;
-					uploadState.is_uploading = false;
-					ImGui::CloseCurrentPopup();
-				}
-			}
-			ImGui::EndPopup();
+		if (!uploadState.error.empty()) {
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+			ImGui::TextWrapped(uploadState.error.c_str());
+			ImGui::PopStyleColor();
 		}
+
+		bool showOk = uploadState.progress >= 1;
+		bool showRetry = uploadState.failed;
+		if (showOk) {
+			if (ImGui::Button("Ok", ImVec2(120, 0))) {
+				uploadState.is_uploading = false;
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+		}
+		else if (showRetry) {
+			if (ImGui::Button("Retry", ImVec2(120, 0))) {
+				uploadState.resetState();
+				boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
+			}
+			ImGui::SameLine();
+		}
+		else {
+			ImGui::Indent(120);
+		}
+
+		if (!showOk) {
+			if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+				uploadState.cancelled = true;
+				uploadState.is_uploading = false;
+				ImGui::CloseCurrentPopup();
+			}
+		}
+		ImGui::EndPopup();
 	}
 }
 
 void TeamTrainingPlugin::ShowDownloadingModal() {
-	//ImGui::SetNextWindowSizeConstraints(ImVec2(400, 200), ImVec2(FLT_MAX, FLT_MAX));
 	if (ImGui::BeginPopupModal("Downloading", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
 		ImGui::Text(("Downloading: " + downloadState.pack_description).c_str());
 		ImGui::ProgressBar(downloadState.progress, ImVec2(300, 0));

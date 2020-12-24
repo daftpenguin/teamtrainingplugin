@@ -1,3 +1,5 @@
+// TODO: Fix my fucking coding style... camelCase or underscores. capitalize methods or don't. ffs pick one holy shit
+
 #pragma comment(lib, "pluginsdk.lib")
 
 #define WIN32_LEAN_AND_MEAN
@@ -30,6 +32,10 @@ constexpr int MAX_FILENAME_LENGTH = 128;
 constexpr int MAX_DESCRIPTION_LENGTH = 500;
 constexpr int MAX_CREATOR_LENGTH = 128;
 constexpr int NUM_TAG_COLUMNS = 5;
+
+constexpr int MAX_SECONDS_SINCE_TEM_FILE_CREATED = 15;
+
+constexpr auto CUSTOM_TRAINING_LOADED_EVENT = "Function TAGame.GameEvent_TrainingEditor_TA.StartPlayTest";
 
 const string CVAR_PREFIX("cl_team_training_");
 
@@ -167,10 +173,11 @@ public:
 class DownloadState : private boost::noncopyable
 {
 public:
-	DownloadState() : is_downloading(false), failed(false), cancelled(false), progress(0), error(""), pack_id(NO_UPLOAD_ID), pack_description(""), mutex() {};
+	DownloadState() : stage(""), is_downloading(false), failed(false), cancelled(false), progress(0), error(""), pack_id(NO_UPLOAD_ID), pack_description(""), temFName(""), mutex() {};
 
 	void newPack(int id, string code, string description) {
 		resetState();
+		stage = "";
 		pack_id = id;
 		pack_code = code;
 		pack_description = description;
@@ -178,6 +185,7 @@ public:
 	}
 
 	void resetState() {
+		stage = "";
 		is_downloading = false;
 		failed = false;
 		cancelled = false;
@@ -185,6 +193,7 @@ public:
 		error = "";
 	}
 
+	string stage;
 	bool is_downloading;
 	bool failed;
 	bool cancelled;
@@ -193,18 +202,20 @@ public:
 	int pack_id;
 	string pack_code;
 	string pack_description;
+	string temFName;
 	boost::mutex mutex;
 };
 
 class UploadState : private boost::noncopyable
 {
 public:
-	UploadState() : is_uploading(false), failed(false), cancelled(false), progress(0), error(""), pack_path(fs::path()), pack_code(""), mutex() {};
+	UploadState() : is_uploading(false), failed(false), cancelled(false), progress(0), error(""), pack_path(fs::path()), pack_code(""), pack_description(""), mutex() {};
 
 	void newPack(TrainingPack pack) {
 		resetState();
 		pack_path = pack.filepath;
 		pack_code = pack.code;
+		pack_description = pack.description;
 		is_uploading = true;
 	};
 
@@ -223,6 +234,7 @@ public:
 	string error;
 	fs::path pack_path;
 	string pack_code;
+	string pack_description;
 	string uploaderID;
 	string uploader;
 	boost::mutex mutex;
@@ -334,6 +346,7 @@ private:
 	};
 	std::string packDataPath = "";
 	// Selection
+	char addByCode[20] = "";
 	int selectedPackIdx = 0;
 	std::vector<TrainingPack> packs;
 	std::vector<TrainingPack> filteredPacks;
@@ -390,6 +403,12 @@ private:
 	void ShowFavoritedPacksWindow();
 	void UploadFavoritedPacks();
 	void FavoritedPacksUploadThread();
+
+	void AddPackByCode(string code);
+	void addPackByCodeThread(bool isRetry);
+	void ShowAddByCodeModal();
+
+	void addPackByTemFNameThread();
 
 	DownloadState downloadState;
 	UploadState uploadState;

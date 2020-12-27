@@ -10,19 +10,16 @@
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
+// WARNING: It gets really ugly below...
+
 // TODO: Prevent users from uploading too frequently (in server code, not here) - by IP, by steamID...
-// TODO: Block uploads containing censored words (catch here, but also apply in server code)
 // TODO: Add commenting and ratings
 // TODO: Add tips/notes from multiple users
 // TODO: Allow reporting of packs, comments, tips, etc
-// TODO: Allow filtering on offense, defense, tags, drill name, creator, code
 // TODO: Specify 0 = none. Search on description. Search on creator.
-// TODO: Sorting methods. Add notes section in metadata.
+// TODO: Sorting methods.
 // TODO: How to determine which packs were downloaded vs created? How to determine which packs can be uploaded?
-// TODO: Track uploader from creator (we're going to upload packs we don't own).
 // TODO: Notes and other data should be updateable by both creator and uploader?
-// TODO: Method to force update packs (new censored words)
-// TODO: Just download all meta data?
 
 using namespace std;
 
@@ -212,8 +209,31 @@ void TeamTrainingPlugin::Render()
 					ImGui::TextWrapped("Filepath: %s", pack.filepath.string().c_str());
 					ImGui::TextWrapped("Tags: %s", boost::algorithm::join(pack.tags, ", ").c_str());
 					if (ImGui::Button("Edit Tags##Selection")) {
+						if (!localEditTagsState.has_downloaded) {
+							localEditTagsState.enableTagsPending(pack.tags);
+							boost::thread t{ &TeamTrainingPlugin::loadAllTagsThread, this, boost::ref(localEditTagsState) };
+						}
+						else {
+							localEditTagsState.unmarkTags();
+							for (auto& tag : pack.tags) {
+								localEditTagsState.tags[tag] = true;
+							}
+						}
 
+						tagEditingPack = pack;
+						ImGui::OpenPopup("Edit Tags");
 					}
+
+					ShowTagsWindow(localEditTagsState, true, std::bind(&TeamTrainingPlugin::loadAllTagsThread, this, placeholders::_1),
+						[this](TagsState& state) {
+							vector<string> newTags = state.GetEnabledTags();
+							bool tagsChanged = tagEditingPack.setTags(newTags);
+							if (tagsChanged) {
+								tagEditingPack.save();
+								localFilterState.filters.tagsState.addTags(newTags);
+								packs.clear();
+							}
+						});
 
 					ImGui::Separator();
 
@@ -405,7 +425,7 @@ void TeamTrainingPlugin::Render()
 				ImGui::Separator();
 			}
 
-			// TODO: Hook game event when training pack loaded and store this data always (unload when training pack unloaded)
+			// TODO: Use Execute to get this data and also track creatorID. Add notes and youtube fields.
 			if (gameWrapper->IsInCustomTraining()) {
 				auto trainingEditor = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address);
 				auto trainingSaveData = trainingEditor.GetTrainingData();
@@ -535,6 +555,7 @@ void TeamTrainingPlugin::Render()
 			ImGui::BulletText("Twitter: @PenguinDaft");
 			ImGui::BulletText("Discord: DaftPenguin#5103");
 			ImGui::BulletText("GitHub: github.com/daftpenguin/teamtrainingplugin");
+			ImGui::TextWrapped("While this plugin is unverified on bakkesplugins.com, all plugin-side code is open source can be found on the GitHub link above along with the zip for every release.");
 
 			ImGui::EndTabItem();
 		}
@@ -589,8 +610,12 @@ void TeamTrainingPlugin::OnClose()
 
 void TeamTrainingPlugin::filterLocalPacks(SearchFilterState& filters)
 {
-	filteredPacks.clear();
+	fs::path selectedPath;
+	if (filteredPacks.size() > selectedPackIdx) {
+		selectedPath = filteredPacks[selectedPackIdx].filepath;
+	}
 	selectedPackIdx = 0;
+	filteredPacks.clear();
 
 	for (auto& pack : packs) {
 		std::string packCode = boost::algorithm::to_lower_copy(pack.code);
@@ -627,6 +652,10 @@ void TeamTrainingPlugin::filterLocalPacks(SearchFilterState& filters)
 		if (!filterDescription.empty() && packDescription.find(filterDescription) == std::string::npos) continue;
 
 		filteredPacks.push_back(pack);
+
+		if (pack.filepath == selectedPath) {
+			selectedPackIdx = filteredPacks.size() - 1;
+		}
 	}
 }
 
@@ -692,7 +721,62 @@ void TeamTrainingPlugin::SearchPacks(SearchFilterState& filters)
 	boost::thread t{ &TeamTrainingPlugin::searchPacksThread, this, boost::ref(filters) };
 }
 
-void TeamTrainingPlugin::downloadTagsThread(SearchFilterState &state)
+void TeamTrainingPlugin::loadAllTagsThread(TagsState& state)
+{
+	// This should result in both local and server tags combined into given state. The state's cancellation should
+	// work as cancellations in both loaders. After a successful load, both localFilterState and searchState tagsStates
+	// should be updated with their relevant tags, too.
+
+	state.refresh();
+	TagsState& local = localFilterState.filters.tagsState;
+	TagsState& server = searchState.filters.tagsState;
+
+	// Only get sever and local tags if this is a forced refresh (state.has_downloaded), or they haven't been loaded yet.
+
+	if (state.has_downloaded || !local.has_downloaded) {
+		loadLocalTagsThread(state);
+		if (state.cancelled || state.failed) {
+			return;
+		}
+		state.is_downloading = true;
+		local.setTags(state.tags);
+	}
+
+	state.tags.clear(); // We'll add local tags back into state later
+	if (state.has_downloaded || server.has_downloaded) {
+		downloadTagsThread(state);
+		if (state.cancelled || state.failed) {
+			return;
+		}
+		server.setTags(state.tags);
+	}
+	else {
+		state.setTags(server.tags);
+	}
+
+	state.addTags(local.tags);
+	state.restoreSelected();
+	state.is_downloading = false;
+	state.has_downloaded = true;
+
+	for (auto& tag : state.pendingEnabledTags) {
+		state.tags[tag] = true;
+	}
+}
+
+void TeamTrainingPlugin::loadLocalTagsThread(TagsState& state)
+{
+	for (auto& pack : packs) {
+		for (auto it = pack.tags.begin(); it != pack.tags.end(); ++it) {
+			state.tags[*it] = false;
+		}
+	}
+	state.restoreSelected();
+	state.is_downloading = false;
+	state.has_downloaded = true;
+}
+
+void TeamTrainingPlugin::downloadTagsThread(TagsState& state)
 {
 	std::string url = "/api/rocket-league/teamtraining/search";
 	json j;
@@ -707,7 +791,7 @@ void TeamTrainingPlugin::downloadTagsThread(SearchFilterState &state)
 			}
 			catch (...) {
 				cvarManager->log(res->body);
-				searchState.error = "Error parsing response from server";
+				state.error = "Error parsing response from server";
 				return;
 			}
 
@@ -715,38 +799,25 @@ void TeamTrainingPlugin::downloadTagsThread(SearchFilterState &state)
 
 			vector<string> tags = js.get<vector<string>>();
 			for (auto it = tags.begin(); it != tags.end(); ++it) {
-				state.tagsState.tags[*it] = false;
+				state.tags[*it] = false;
 			}
-			state.tagsState.restoreSelected();
-			state.tagsState.is_downloading = false;
-			state.tagsState.has_downloaded = true;
+			state.restoreSelected();
+			state.is_downloading = false;
+			state.has_downloaded = true;
 		}
 		else {
 			cvarManager->log(res->body);
-			state.tagsState.is_downloading = false;
-			state.tagsState.failed = true;
-			state.tagsState.error = res->body;
+			state.is_downloading = false;
+			state.failed = true;
+			state.error = res->body;
 		}
 	}
 	else {
 		cvarManager->log("Failed to reach host");
-		state.tagsState.is_downloading = false;
-		state.tagsState.failed = true;
-		state.tagsState.error = "Failed to reach host";
+		state.is_downloading = false;
+		state.failed = true;
+		state.error = "Failed to reach host";
 	}
-}
-
-void TeamTrainingPlugin::loadLocalTagsThread(SearchFilterState& state)
-{
-	for (auto& pack : packs) {
-		for (auto it = pack.tags.begin(); it != pack.tags.end(); ++it) {
-			state.tagsState.tags[*it] = false;
-		}
-	}
-	state.tagsState.restoreSelected();
-
-	state.tagsState.is_downloading = false;
-	state.tagsState.has_downloaded = true;
 }
 
 void TeamTrainingPlugin::downloadPackThread(bool isRetry)
@@ -767,34 +838,40 @@ void TeamTrainingPlugin::downloadPackThread(bool isRetry)
 
 	httplib::Client cli(SERVER_URL);
 
-	ofstream outfile(fpath);
+	stringstream dataSS;
 
-	auto res = cli.Get(("/api/rocket-league/teamtraining/download?id=" + to_string(downloadState.pack_id)).c_str(),
+	bool packExists;
+	auto res = cli.Get(("/api/rocket-league/teamtraining/download?id=" + to_string(downloadState.pack_id)).c_str(), httplib::Headers(),
+		[&](const httplib::Response& r) {
+			packExists = r.status == 200; // Don't update progress if we're not downloading the pack
+			return true;
+		},
 		[&](const char* data, size_t data_length) {
-			outfile << string(data, data_length);
-			cvarManager->log(string(data, data_length));
+			dataSS << string(data, data_length);
 			return downloadState.cancelled == false;
 		},
 		[&](uint64_t len, uint64_t total) {
-			downloadState.progress = (float) len / (float) total;
+			if (packExists) downloadState.progress = (float)len / (float)total;
 			return downloadState.cancelled == false;
 		});
-	outfile.close();
 
-	// TODO: res->body causes issues if status not 200
 	if (res) {
-		if (res->status != 200) {
-			fs::remove(fpath);
+		if (res->status == 200) {
+			ofstream outfile(fpath);
+			outfile << dataSS.str();
+			outfile.close();
+			packs.clear();
+		}
+		else if (res->status != 404) {
+			downloadState.error = dataSS.str();
 			downloadState.failed = true;
-			cvarManager->log(res->body);
-			downloadState.error = res->body;
+			cvarManager->log(downloadState.error);
 		}
 	}
 	else {
-		fs::remove(fpath);
 		downloadState.failed = true;
-		cvarManager->log("Download failed. Could not reach server.");
-		downloadState.error = "Download failed. Could not reach server.";
+		downloadState.error = "Download failed. Could not reach server";
+		cvarManager->log(downloadState.error);
 	}
 }
 
@@ -803,7 +880,6 @@ void TeamTrainingPlugin::DownloadPack(TrainingPackDBMetaData& pack)
 	downloadState.newPack(pack.id, pack.code, pack.description);
 	ImGui::OpenPopup("Downloading");
 	boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this, false };
-	packs.clear(); // so we reload the packs next time selection tab is loaded
 }
 
 void TeamTrainingPlugin::uploadPackThread()
@@ -836,9 +912,30 @@ void TeamTrainingPlugin::uploadPackThread()
 	auto res = cli.Post("/api/rocket-league/teamtraining/upload", items);
 	if (res) {
 		if (res->status == 200) {
-			// TODO: Have server return new uploadID, add to the json, then rewrite the training pack file
+			json js;
+			try {
+				js = json::parse(res->body);
+			}
+			catch (...) {
+				cvarManager->log(res->body);
+				uploadState.failed = true;
+				uploadState.error = "Error parsing upload favorited pack response from server";
+				return;
+			}
+
+			if (js.find("id") == js.end() || js.find("code") == js.end()) {
+				uploadState.failed = true;
+				uploadState.error = "Received bad response from server";
+				cvarManager->log(res->body);
+				return;
+			}
+
+			TrainingPack pack(uploadState.pack_path);
+			pack.uploadID = js["id"].get<int>();
+			pack.save();
 			cvarManager->log("Upload successful");
 			uploadState.progress = 1;
+			packs.clear(); // Reload so pack has uploadID
 		}
 		else {
 			uploadState.failed = true;
@@ -870,7 +967,7 @@ void TeamTrainingPlugin::UploadPack(const TrainingPack &pack)
 
 void TeamTrainingPlugin::AddSearchFilters(
 	SearchFilterState& filterState, string idPrefix, bool alwaysShowSearchButton,
-	std::function<void(SearchFilterState& filters)> tagLoader,
+	std::function<void(TagsState& tagsState)> tagLoader,
 	std::function<void(SearchFilterState& filters)> searchCallback)
 {
 	if (ImGui::CollapsingHeader("Search Filters")) {
@@ -889,12 +986,12 @@ void TeamTrainingPlugin::AddSearchFilters(
 		if (ImGui::Button(("Edit Tags##" + idPrefix + "EditTags").c_str())) {
 			if (!filterState.tagsState.has_downloaded) {
 				filterState.tagsState.refresh();
-				boost::thread t{ tagLoader, boost::ref(filterState) };
+				boost::thread t{ tagLoader, boost::ref(filterState.tagsState) };
 			}
 			filterState.tagsState.beforeEditEnabledTags = filterState.tagsState.GetEnabledTags();
 			ImGui::OpenPopup("Edit Tags");
 		}
-		ShowTagsWindow(filterState, tagLoader);
+		ShowTagsWindow(filterState.tagsState, false, tagLoader, nullptr);
 
 		if (ImGui::Button(("Search##" + idPrefix + "SearchButton").c_str())) {
 			searchCallback(filterState);
@@ -913,32 +1010,34 @@ void TeamTrainingPlugin::AddSearchFilters(
 	}
 }
 
-void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state, std::function<void(SearchFilterState& filters)> tagLoader)
+void TeamTrainingPlugin::ShowTagsWindow(TagsState& state, bool allowCustomTags,
+	std::function<void(TagsState& state)> tagLoader,
+	std::function<void(TagsState& state)> applyCallback)
 {
 	ImGui::SetNextWindowSizeConstraints(ImVec2(790, 600), ImVec2(FLT_MAX, FLT_MAX));
 	if (ImGui::BeginPopupModal("Edit Tags", NULL)) {
-		if (state.tagsState.is_downloading) {
+		if (state.is_downloading) {
 			ImGui::Text("Retrieving tags from the server");
 			ImGui::SetCursorPos((ImGui::GetWindowSize() - ImVec2(30, 30)) * ImVec2(0.5f, 0.25f));
 			ImGui::Spinner("Retrieving...", 30, 5);
 		}
 		else {
-			if (state.tagsState.error != "") {
+			if (state.error != "") {
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-				ImGui::TextWrapped(state.tagsState.error.c_str());
+				ImGui::TextWrapped(state.error.c_str());
 				ImGui::PopStyleColor();
 			}
 
-			bool showRetry = state.tagsState.failed;
+			bool showRetry = state.failed;
 			if (showRetry) {
 				if (ImGui::Button("Retry", ImVec2(120, 0))) {
-					state.tagsState.retry();
+					state.retry();
 					boost::thread t{ tagLoader, boost::ref(state) };
 				}
 				if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-					state.tagsState.cancel();
-					if (state.tagsState.tags.size() == 0) {
-						state.tagsState.undoEdits();
+					state.cancel();
+					if (state.tags.size() == 0) {
+						state.undoEdits();
 						ImGui::CloseCurrentPopup();
 					}
 				}
@@ -946,9 +1045,9 @@ void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state, std::function<
 			else {
 				// Populate checkboxes
 				ImGui::Columns(NUM_TAG_COLUMNS, NULL, false);
-				size_t columnSize = 1 + ((state.tagsState.tags.size() - 1) / (size_t)NUM_TAG_COLUMNS); // Fast ceiling of int div
+				size_t columnSize = 1 + ((state.tags.size() - 1) / (size_t)NUM_TAG_COLUMNS); // Fast ceiling of int div
 				size_t i = 0;
-				for (auto it = state.tagsState.tags.begin(); it != state.tagsState.tags.end(); ++it) {
+				for (auto it = state.tags.begin(); it != state.tags.end(); ++it) {
 					if (i != 0 && i % columnSize == 0) {
 						ImGui::NextColumn();
 					}
@@ -956,22 +1055,32 @@ void TeamTrainingPlugin::ShowTagsWindow(SearchFilterState& state, std::function<
 					ImGui::Checkbox(it->first.c_str(), &it->second);
 				}
 				ImGui::EndColumns();
+
+				if (allowCustomTags) {
+					ImGui::InputText("", customTag, IM_ARRAYSIZE(customTag));
+					ImGui::SameLine();
+					if (ImGui::Button("Add New Tag")) {
+						state.tags[customTag] = true;
+						customTag[0] = 0;
+					}
+				}
 			}
 		}
 
 		ImGui::Dummy(ImVec2(0.0f, 10.0f));
 		if (ImGui::Button("Apply")) {
-			state.tagsState.beforeEditEnabledTags.clear();
+			state.beforeEditEnabledTags.clear();
 			ImGui::CloseCurrentPopup();
+			if (applyCallback != nullptr) applyCallback(state);
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Cancel")) {
-			state.tagsState.undoEdits();
+			state.undoEdits();
 			ImGui::CloseCurrentPopup();
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Refresh Tags")) {
-			state.tagsState.refresh();
+			state.refresh();
 			boost::thread t{ tagLoader, boost::ref(state) };
 		}
 
@@ -1188,7 +1297,7 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 					pack_code = js["code"].get<string>();
 				}
 				else {
-					// TODO: We probably shouldn't full fail here but instead mark pack as failed and continue
+					// Full failing here might be unnecessary. Should probably determine from error if it's pack related error, or server error.
 					state.failed = true;
 					state.error = res->body;
 					cvarManager->log(state.error);
@@ -1216,33 +1325,41 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 		}
 		else {
 			cvarManager->log("Downloading pack: " + to_string(pack_id));
-			ofstream outfile(outpath);
-			auto res = cli.Get(("/api/rocket-league/teamtraining/download?id=" + to_string(pack_id)).c_str(),
+			stringstream dataSS;
+			bool packExists;
+
+			auto res = cli.Get(("/api/rocket-league/teamtraining/download?id=" + to_string(pack_id)).c_str(), httplib::Headers(),
+				[&](const httplib::Response& r) {
+					packExists = r.status == 200; // Don't update progress if we're not downloading the pack
+					return true;
+				},
 				[&](const char* data, size_t data_length) {
-					outfile << string(data, data_length);
+					dataSS << string(data, data_length);
 					return state.cancelled == false;
 				});
-			outfile.close();
 
-			// TODO: res->body causes issues if status not 200
 			if (res) {
 				if (res->status == 200) {
+					// This could be better but whatever...
+					ofstream outfile(outpath);
+					outfile << dataSS.str();
+					outfile.close();
 					TrainingPack pack(outpath);
 					pack.addTag("Favorite");
 					pack.save();
+					packs.clear();
+					return;
 				}
 				else {
-					fs::remove(outpath);
 					state.failed = true;
-					state.error = res->body;
+					state.error = dataSS.str();
 					cvarManager->log(state.error);
 					return;
 				}
 			}
 			else {
-				fs::remove(outpath);
 				state.failed = true;
-				state.error = "Download failed. Could not reach server.";
+				state.error = "Download failed. Could not reach server";
 				cvarManager->log(state.error);
 				return;
 			}
@@ -1272,7 +1389,6 @@ void TeamTrainingPlugin::AddPackByCode(string code)
 void TeamTrainingPlugin::addPackByCodeThread(bool isRetry)
 {
 	// Call download by code and save pack if it exists
-	// TODO: Just add a fucking modal. The errorMsgs usage isn't thread safe at all...
 	// TODO: We should really be generalizing some download pack function to use here, in download pack thread, and the add favs thread
 	fs::path fpath = getPackDataPath(downloadState.pack_code);
 
@@ -1321,7 +1437,7 @@ void TeamTrainingPlugin::addPackByCodeThread(bool isRetry)
 	}
 	else {
 		downloadState.failed = true;
-		downloadState.error = "Could not reach server";
+		downloadState.error = "Download failed. Could not reach server";
 		cvarManager->log(downloadState.error);
 		return;
 	}
@@ -1545,37 +1661,44 @@ void TeamTrainingPlugin::addPackByTemFNameThread()
 		return;
 	}
 
+	// Now download the pack
 	fs::path outpath = getPackDataPath(pack_code);
 	cvarManager->log("Downloading pack: " + to_string(pack_id));
 	downloadState.stage = "Downloading training pack data from server";
-	ofstream outfile(outpath);
-	auto downRes = cli.Get(("/api/rocket-league/teamtraining/download?id=" + to_string(pack_id)).c_str(),
-		[&](const char* data, size_t data_length) {
-			outfile << string(data, data_length);
+	stringstream dataSS;
+	bool packExists;
+
+	auto downRes = cli.Get(("/api/rocket-league/teamtraining/download?code=" + to_string(pack_id)).c_str(), httplib::Headers(),
+		[&](const httplib::Response& r) {
+			packExists = r.status == 200; // Don't update progress if we're not downloading the pack
 			return true;
 		},
-		[&](uint64_t len, uint64_t total) {
-			downloadState.progress = (float)len / (float)total;
+		[&](const char* data, size_t data_length) {
+			dataSS << string(data, data_length);
+			return downloadState.cancelled == false;
+		},
+			[&](uint64_t len, uint64_t total) {
+			if (packExists) downloadState.progress = (float)len / (float)total;
 			return downloadState.cancelled == false;
 		});
-	outfile.close();
 
-	// TODO: res->body causes issues if status not 200
 	if (downRes) {
 		if (downRes->status == 200) {
+			ofstream outfile(outpath);
+			outfile << dataSS.str();
+			outfile.close();
 			downloadState.stage = "Pack added";
 			packs.clear();
+			return;
 		}
 		else {
-			fs::remove(outpath);
-			downloadState.error = downRes->body;
+			downloadState.error = dataSS.str();
 			cvarManager->log(downloadState.error);
 			downloadState.failed = true;
 			return;
 		}
 	}
 	else {
-		fs::remove(outpath);
 		downloadState.error = "Download failed. Could not reach server.";
 		cvarManager->log(downloadState.error);
 		downloadState.failed = true;

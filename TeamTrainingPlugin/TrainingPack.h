@@ -121,6 +121,7 @@ public:
 	bool allPlayersInDrillAdded();
 	bool expectingMoreDrills();
 
+	bool setTags(std::vector<std::string> tags);
 	void addTag(std::string tag);
 	void removeTag(std::string tag);
 

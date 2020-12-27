@@ -140,6 +140,31 @@ bool TrainingPack::expectingMoreDrills()
 	return (drills.size() < expected_drills);
 }
 
+// Sets tags to given tags, and returns true if they are different than the current tags
+bool TrainingPack::setTags(std::vector<std::string> newTags)
+{
+	bool isDiff = newTags.size() != tags.size();
+	if (!isDiff) {
+		for (auto& tag : newTags) {
+			if (tags.find(tag) == tags.end()) {
+				isDiff = true;
+				break;
+			}
+		}
+	}
+
+	if (!isDiff) {
+		return false;
+	}
+
+	tags.clear();
+	for (auto& tag : newTags) {
+		tags.insert(tag);
+	}
+
+	return isDiff;
+}
+
 void TrainingPack::addTag(std::string tag)
 {
 	tags.insert(tag);
@@ -198,12 +223,13 @@ void from_json(const json& j, TrainingPack& p)
 		if (j.find("youtube") != j.end()) {
 			j.at("youtube").get_to(p.youtube);
 		}
+	}
 
-		p.tags = std::unordered_set<std::string>();
-		if (j.find("tags") != j.end()) {
-			for (json tag : j["tags"]) {
-				p.tags.insert(tag.get<std::string>());
-			}
+	// Tags can be added to older packs so don't assume version here
+	p.tags = std::unordered_set<std::string>();
+	if (j.find("tags") != j.end()) {
+		for (json tag : j["tags"]) {
+			p.tags.insert(tag.get<std::string>());
 		}
 	}
 

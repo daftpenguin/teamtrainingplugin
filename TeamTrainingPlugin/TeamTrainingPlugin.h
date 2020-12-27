@@ -1,5 +1,5 @@
 // TODO: Fix my fucking coding style... camelCase or underscores. capitalize methods or don't. ffs pick one holy shit
-
+#pragma once
 #pragma comment(lib, "pluginsdk.lib")
 
 #define WIN32_LEAN_AND_MEAN
@@ -47,6 +47,8 @@ const string CVAR_PREFIX("cl_team_training_");
 class TagsState : private boost::noncopyable
 {
 public:
+
+	// Prepares tag state for being refreshed with tags and marks it as being refreshed
 	void refresh() {
 		oldTags.clear();
 		for (auto it = tags.begin(); it != tags.end(); ++it) {
@@ -54,6 +56,10 @@ public:
 		}
 		resetState();
 		is_downloading = true;
+	}
+
+	bool isRefreshing() {
+		return is_downloading;
 	}
 
 	void retry() {
@@ -69,7 +75,28 @@ public:
 		oldTags.clear();
 	}
 
-	void clear() {
+	void setTags(map<string, bool> newTags) {
+		tags.clear();
+		addTags(newTags);
+	}
+
+	void addTags(map<string, bool> newTags) {
+		for (auto it = newTags.begin(); it != newTags.end(); ++it) {
+			if (tags.find(it->first) == tags.end()) {
+				tags[it->first] = false;
+			}
+		}
+	}
+
+	void addTags(vector<string> newTags) {
+		for (auto& tag : newTags) {
+			if (tags.find(tag) == tags.end()) {
+				tags[tag] = false;
+			}
+		}
+	}
+
+	void unmarkTags() {
 		for (auto it = tags.begin(); it != tags.end(); ++it) {
 			it->second = false;
 		}
@@ -94,7 +121,14 @@ public:
 				}
 			}
 		}
-		oldTags.clear();
+	}
+
+	// Add tags to be enabled after refreshing or initial loading of tags
+	void enableTagsPending(unordered_set<string> tags) {
+		pendingEnabledTags.clear();
+		for (auto& tag : tags) {
+			pendingEnabledTags.push_back(tag);
+		}
 	}
 
 	void undoEdits() {
@@ -117,6 +151,7 @@ public:
 	bool cancelled;
 	float progress;
 	string error;
+	vector<string> pendingEnabledTags;    // Tags to be enabled after refreshing or first time loading them
 	vector<string> beforeEditEnabledTags; // If user cancels editing the tags, reset them
 	map<string, bool> tags;               // Tag => is enabled?
 	map<string, bool> oldTags;            // Old tag => is enabled? mapping so we can restore if user cancels refresh or it fails
@@ -133,7 +168,7 @@ public:
 		code[0] = 0;
 		offense = 0;
 		defense = 0;
-		tagsState.clear();
+		tagsState.unmarkTags();
 	}
 
 	char description[MAX_DESCRIPTION_LENGTH];
@@ -347,10 +382,11 @@ private:
 	std::string packDataPath = "";
 	// Selection
 	char addByCode[20] = "";
+	char customTag[128] = "";
+	TrainingPack tagEditingPack;
 	int selectedPackIdx = 0;
 	std::vector<TrainingPack> packs;
 	std::vector<TrainingPack> filteredPacks;
-	SearchState localFilterState;
 	// Downloads
 	int downloadSelectedPackIdx = 0;
 	SearchState searchState;
@@ -381,7 +417,7 @@ private:
 
 	void AddSearchFilters(
 		SearchFilterState& filterState, string idPrefix, bool alwaysShowSearchButton,
-		std::function<void(SearchFilterState& filters)> tagLoader,
+		std::function<void(TagsState& tagsState)> tagLoader,
 		std::function<void(SearchFilterState& filters)> searchCallback);
 	void filterLocalPacks(SearchFilterState& filters);
 	
@@ -396,9 +432,12 @@ private:
 	void UploadPack(const TrainingPack& pack);
 	void ShowUploadingModal();
 
-	void loadLocalTagsThread(SearchFilterState& filters);
-	void downloadTagsThread(SearchFilterState& filters);
-	void ShowTagsWindow(SearchFilterState& state, std::function<void(SearchFilterState& filters)> tagLoader);
+	void loadLocalTagsThread(TagsState& state);
+	void downloadTagsThread(TagsState& state);
+	void loadAllTagsThread(TagsState& state);
+	void ShowTagsWindow(TagsState& state, bool allowCustomTags,
+		std::function<void(TagsState& state)> tagLoader,
+		std::function<void(TagsState& state)> applyCallback);
 
 	void ShowFavoritedPacksWindow();
 	void UploadFavoritedPacks();
@@ -410,9 +449,11 @@ private:
 
 	void addPackByTemFNameThread();
 
-	DownloadState downloadState;
-	UploadState uploadState;
+	TagsState localEditTagsState;
+	SearchState localFilterState;
 	UploadFavoritesState uploadFavsState;
+	UploadState uploadState;
+	DownloadState downloadState;
 };
 
 void to_json(json& j, const SearchFilterState& s);

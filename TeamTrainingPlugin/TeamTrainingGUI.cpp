@@ -75,7 +75,7 @@ void TeamTrainingPlugin::Render()
 	
 	if (ImGui::BeginTabBar("Team Training", ImGuiTabBarFlags_None)) {
 		if (ImGui::BeginTabItem("Selection")) {
-			ImGui::TextWrapped("Be sure to start a multiplayer freeplay session via Rocket Plugin before loading a pack.");
+			ImGui::TextWrapped("For multiplayer training packs, be sure to start a multiplayer freeplay session via Rocket Plugin before loading a pack.");
 
 			// This must be done before calling AddSearchFilters
 			if (packs.size() == 0) {
@@ -207,7 +207,6 @@ void TeamTrainingPlugin::Render()
 						}
 					}
 					ImGui::TextWrapped("Filepath: %s", pack.filepath.string().c_str());
-					ImGui::TextWrapped("Tags: %s", boost::algorithm::join(pack.tags, ", ").c_str());
 					if (ImGui::Button("Edit Tags##Selection")) {
 						if (!localEditTagsState.has_downloaded) {
 							localEditTagsState.enableTagsPending(pack.tags);
@@ -223,6 +222,8 @@ void TeamTrainingPlugin::Render()
 						tagEditingPack = pack;
 						ImGui::OpenPopup("Edit Tags");
 					}
+					ImGui::SameLine();
+					ImGui::TextWrapped("Tags: %s", boost::algorithm::join(pack.tags, ", ").c_str());
 
 					ShowTagsWindow(localEditTagsState, true, std::bind(&TeamTrainingPlugin::loadAllTagsThread, this, placeholders::_1),
 						[this](TagsState& state) {
@@ -410,7 +411,7 @@ void TeamTrainingPlugin::Render()
 			ImGui::TextWrapped("Number of drills is the total number of drills that will be in the final team training pack.");
 			ImGui::PopStyleColor();
 			ImGui::Separator();
-			ImGui::TextWrapped("For example, convert WayProtein's training pack by loading it with the button below, enter 2 offensive players, 0 defensive players, and 8 drills. Then click convert.");
+			ImGui::TextWrapped("For example, convert WayProtein's training pack by loading it with the button below, enter 2 offensive players, 0 defensive players, and 8 drills, then click convert.");
 			if (ImGui::Button("Load WayProtein's Passing (downfield left)")) {
 				cvarManager->executeCommand("sleep 1; load_training C833-6A35-A46A-7191");
 			}
@@ -425,27 +426,27 @@ void TeamTrainingPlugin::Render()
 				ImGui::Separator();
 			}
 
-			// TODO: Use Execute to get this data and also track creatorID. Add notes and youtube fields.
 			if (gameWrapper->IsInCustomTraining()) {
-				auto trainingEditor = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address);
-				auto trainingSaveData = trainingEditor.GetTrainingData();
-
-				if (trainingSaveData.GetbUnowned() == 1) {
-					auto training = trainingSaveData.GetTrainingData();
-					if (strcmp(training.GetCode().ToString().c_str(), code) != 0) {
-						::strncpy(code, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(code));
-						::strncpy(filename, training.GetCode().ToString().c_str(), IM_ARRAYSIZE(filename));
-						::strncpy(creator, training.GetCreatorName().ToString().c_str(), IM_ARRAYSIZE(creator));
-						::strncpy(description, training.GetTM_Name().ToString().c_str(), IM_ARRAYSIZE(description));
-					}
+				if (!inGameTrainingPackData.failed && ::strcmp(inGameTrainingPackData.code, code) != 0) {
+					::strncpy(filename, inGameTrainingPackData.code, sizeof(code));
+					::strncpy(code, inGameTrainingPackData.code, sizeof(code));
+					::strncpy(creator, inGameTrainingPackData.creator, sizeof(creator));
+					::strncpy(creatorID, inGameTrainingPackData.creatorID, sizeof(creatorID));
+					::strncpy(description, inGameTrainingPackData.description, sizeof(description));
+					gui_num_drills = inGameTrainingPackData.numDrills;
+					offensive_players = 1;
+					defensive_players = 0;
+					enabledTags.clear();
 				}
 			}
 
 			if (ImGui::InputInt("Offensive players", &offensive_players, ImGuiInputTextFlags_CharsDecimal)) {
 				offensive_players = (offensive_players < 0) ? 0 : offensive_players;
+				gui_num_drills = inGameTrainingPackData.fixGUIDrills(offensive_players, defensive_players, gui_num_drills);
 			}
 			if (ImGui::InputInt("Defensive players", &defensive_players, ImGuiInputTextFlags_CharsDecimal)) {
 				defensive_players = (defensive_players < 0) ? 0 : defensive_players;
+				gui_num_drills = inGameTrainingPackData.fixGUIDrills(offensive_players, defensive_players, gui_num_drills);
 			}
 			if (ImGui::InputInt("Number of drills", &gui_num_drills, ImGuiInputTextFlags_CharsDecimal)) {
 				gui_num_drills = (gui_num_drills < 1) ? 1 : gui_num_drills;
@@ -453,8 +454,35 @@ void TeamTrainingPlugin::Render()
 
 			ImGui::InputText("Filename (no spaces or extensions)", filename, IM_ARRAYSIZE(filename), ImGuiInputTextFlags_CallbackCharFilter, filenameFilter);
 			ImGui::InputText("Creator", creator, IM_ARRAYSIZE(creator), ImGuiInputTextFlags_None);
-			ImGui::InputText("Description ", description, IM_ARRAYSIZE(description), ImGuiInputTextFlags_None);
+			ImGui::InputText("Description", description, IM_ARRAYSIZE(description), ImGuiInputTextFlags_None);
+			ImGui::InputTextMultiline("Creator Notes", creatorNotes, IM_ARRAYSIZE(creatorNotes));
+			ImGui::InputText("Youtube Link", youtubeLink, IM_ARRAYSIZE(youtubeLink), ImGuiInputTextFlags_None);
+
+			if (ImGui::Button("Edit Tags##Creation")) {
+				if (!localEditTagsState.has_downloaded) {
+					localEditTagsState.enableTagsPending(enabledTags);
+					boost::thread t{ &TeamTrainingPlugin::loadAllTagsThread, this, boost::ref(localEditTagsState) };
+				}
+				else {
+					localEditTagsState.unmarkTags();
+					for (auto& tag : enabledTags) {
+						localEditTagsState.tags[tag] = true;
+					}
+				}
+
+				ImGui::OpenPopup("Edit Tags");
+			}
+			ImGui::SameLine();
+			ImGui::TextWrapped("Tags: %s", boost::join(enabledTags, ",").c_str());
+
+			ShowTagsWindow(localEditTagsState, true, std::bind(&TeamTrainingPlugin::loadAllTagsThread, this, placeholders::_1),
+				[this](TagsState& state) {
+					enabledTags.clear();
+					enabledTags = state.GetEnabledTags();
+				});
+
 			ImGui::Text("Code: %s", code);
+			ImGui::Text("CreatorID: %s", creatorID);
 
 			if (ImGui::Button("Convert")) {
 				errorMsgs["Creation"].clear();
@@ -469,27 +497,36 @@ void TeamTrainingPlugin::Render()
 				if (filename[0] == '\0') {
 					errorMsgs["Creation"].push_back("Must specify a filename.");
 				}
-
-				if (errorMsgs["Creation"].size() == 0) {
-					errorMsgs["Creation"].clear();
-					std::string creatorEscaped(creator);
-					std::string descriptionEscaped(description);
-					boost::replace_all(descriptionEscaped, "\"", "\\\"");
-					boost::replace_all(descriptionEscaped, "'", "\\'");
-					boost::replace_all(creatorEscaped, "\"", "\\\"");
-					boost::replace_all(creatorEscaped, "'", "\\'");
-					std::stringstream cmd_ss;
-					cmd_ss << "sleep 1; team_train_internal_convert " << offensive_players << " " << defensive_players << " " << gui_num_drills
-						<< " \"" << filename << "\" \"" << creatorEscaped << "\" \"" << descriptionEscaped << "\" \"" << code << "\"";
-					std::string cmd = cmd_ss.str();
-					OnClose();
-					cvarManager->executeCommand(cmd);
+				if (!inGameTrainingPackData.failed && (offensive_players + defensive_players) * gui_num_drills > inGameTrainingPackData.numDrills) {
+					errorMsgs["Creation"].push_back("Not enough shots in the custom training pack to support that many team training drills: \
+						(offense + defense) * number of drills must be less than or equal to " + to_string(inGameTrainingPackData.numDrills) + ".");
 				}
+
+				OnClose();
+
+				gameWrapper->Execute([this](GameWrapper* gw) {
+					if (!gameWrapper->IsInCustomTraining()) {
+						cvarManager->log("Not in custom training");
+						return;
+					}
+
+					unordered_set<string> tags;
+					for (auto it = enabledTags.begin(); it != enabledTags.end(); ++it) {
+						tags.insert(*it);
+					}
+
+					conversion_pack = TrainingPack(getPackDataPath(filename), offensive_players,
+						defensive_players, gui_num_drills, code, creator, creatorID,
+						description, creatorNotes, youtubeLink, tags);
+					conversion_pack.startNewDrill();
+					getNextShotCalled = 0;
+					getNextShot();
+					});
 			}
 
 			ImGui::Separator();
 
-			ImGui::Text("Drill order:");
+			ImGui::Text(("Drill order (repeat " + to_string(gui_num_drills) + " times):").c_str());
 			if (offensive_players > 0) {
 				ImGui::Text("Shooter");
 			}
@@ -727,7 +764,6 @@ void TeamTrainingPlugin::loadAllTagsThread(TagsState& state)
 	// work as cancellations in both loaders. After a successful load, both localFilterState and searchState tagsStates
 	// should be updated with their relevant tags, too.
 
-	state.refresh();
 	TagsState& local = localFilterState.filters.tagsState;
 	TagsState& server = searchState.filters.tagsState;
 
@@ -981,8 +1017,6 @@ void TeamTrainingPlugin::AddSearchFilters(
 		ImGui::InputText(("Creator##" + idPrefix + "Creator").c_str(), filterState.creator, IM_ARRAYSIZE(filterState.creator));
 		ImGui::InputText(("Training Pack Code##" + idPrefix + "Code").c_str(), filterState.code, IM_ARRAYSIZE(filterState.code));
 
-		ImGui::Text("Tags: %s", boost::algorithm::join(filterState.tagsState.GetEnabledTags(), ", ").c_str());
-
 		if (ImGui::Button(("Edit Tags##" + idPrefix + "EditTags").c_str())) {
 			if (!filterState.tagsState.has_downloaded) {
 				filterState.tagsState.refresh();
@@ -991,6 +1025,8 @@ void TeamTrainingPlugin::AddSearchFilters(
 			filterState.tagsState.beforeEditEnabledTags = filterState.tagsState.GetEnabledTags();
 			ImGui::OpenPopup("Edit Tags");
 		}
+		ImGui::SameLine();
+		ImGui::TextWrapped("Tags: %s", boost::algorithm::join(filterState.tagsState.GetEnabledTags(), ", ").c_str());
 		ShowTagsWindow(filterState.tagsState, false, tagLoader, nullptr);
 
 		if (ImGui::Button(("Search##" + idPrefix + "SearchButton").c_str())) {
@@ -1164,6 +1200,12 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 	state.is_running = true;
 	state.was_started = true;
 
+	// Try to update player's name in case it has changed since plugin was loaded
+	gameWrapper->Execute([this](GameWrapper* gw) {
+		auto pname = gw->GetPlayerName();
+		if (!pname.IsNull()) uploader = pname.ToString();
+		});
+
 	// Can't figure out how to get full path to favorited packs directory, so we just get all favorited packs from every user directory inside TAGame/Training
 
 	char* userprofile = getenv("USERPROFILE");
@@ -1270,7 +1312,9 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 			vector<char> buf(istreambuf_iterator<char>(fin), {});
 
 			httplib::MultipartFormDataItems items = {
-			{ "file", string(buf.data(), buf.size()), fpath.filename().string(), "application/octet-stream" }
+				{ "file", string(buf.data(), buf.size()), fpath.filename().string(), "application/octet-stream" },
+				{ "uploader", uploader, "", "" },
+				{ "uploaderID", uploaderID, "", "" }
 			};
 
 			auto res = cli.Post("/api/rocket-league/teamtraining/upload", items);
@@ -1348,7 +1392,6 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 					pack.addTag("Favorite");
 					pack.save();
 					packs.clear();
-					return;
 				}
 				else {
 					state.failed = true;
@@ -1791,26 +1834,4 @@ void TeamTrainingPlugin::ShowDownloadingModal() {
 
 		ImGui::EndPopup();
 	}
-}
-
-vector<string> TagsState::GetEnabledTags() const {
-	vector<string> tags;
-	for (auto it = this->tags.begin(); it != this->tags.end(); ++it) {
-		if (it->second) {
-			tags.push_back(it->first);
-		}
-	}
-	return tags;
-}
-
-void to_json(json& j, const SearchFilterState& s)
-{
-	j = json{
-		{"description", s.description},
-		{"creator", s.creator},
-		{"code", s.code},
-		{"offense", s.offense},
-		{"defense", s.defense},
-		{"tags", s.tagsState.GetEnabledTags()}
-	};
 }

@@ -6,6 +6,7 @@
 #include "bakkesmod/wrappers/GameEvent/ReplayDirectorWrapper.h"
 #include "bakkesmod/wrappers/WrapperStructs.h"
 #include "nlohmann/json.hpp"
+
 #include <string>
 #include <vector>
 #include <chrono>
@@ -14,20 +15,21 @@
 
 using json = nlohmann::ordered_json;
 namespace fs = std::filesystem;
+using namespace std;
 
 static constexpr int NO_UPLOAD_ID = -1;
 static constexpr int LATEST_TRAINING_PACK_VERSION = 4;
 
 struct TrainingPackDBMetaData {
 	int id;
-	std::string code;
-	std::string description;
-	std::string creator;
+	string code;
+	string description;
+	string creator;
 	int offense;
 	int defense;
 	int num_drills;
 	int downloads;
-	std::unordered_set<std::string> tags;
+	unordered_set<string> tags;
 };
 
 struct TrainingPackBall {
@@ -71,47 +73,48 @@ struct TrainingPackPlayer {
 
 struct TrainingPackDrill {
 	TrainingPackBall ball;
-	std::vector<TrainingPackPlayer> passers;
+	vector<TrainingPackPlayer> passers;
 	TrainingPackPlayer shooter;
-	std::vector<TrainingPackPlayer> defenders;
+	vector<TrainingPackPlayer> defenders;
 };
 
 class TrainingPack
 {
 public:
 	TrainingPack();
-	TrainingPack(std::string filepath) : TrainingPack(fs::path(filepath)) {};
+	TrainingPack(string filepath) : TrainingPack(fs::path(filepath)) {};
 	TrainingPack(fs::path filepath);
 	
-	std::string errorMsg = ""; // Use this to display error messages in pack selection tab
-	std::chrono::system_clock::time_point load_time;
+	string errorMsg = ""; // Use this to display error messages in pack selection tab
+	chrono::system_clock::time_point load_time;
 	fs::path filepath;
 	int version = 0;
 	int offense = 0;
 	int defense = 0;
 
 	// Version 2 data
-	std::string description;
-	std::string creator;
-	std::string code;
+	string description;
+	string creator;
+	string code;
 
 	// Version 3 data only added angular field to the ball
 
 	// Version 4 data
-	std::string creatorID;
-	std::string uploader;
-	std::string uploaderID;
+	string creatorID;
+	string uploader;
+	string uploaderID;
 	int uploadID;
-	std::unordered_set<std::string> tags;
+	unordered_set<string> tags;
 	int numDrills;
-	std::string notes;
-	std::string youtube;
+	string notes;
+	string youtube;
 
-	std::vector<TrainingPackDrill> drills;
+	vector<TrainingPackDrill> drills;
 
 	// Things needed for pack creation, properties should not be imported/exported
-	TrainingPack(fs::path filepath, int offense, int defense, std::string description,
-		std::string creator, std::string code, std::string creatorID, std::vector<std::string> tags, int num_drills);
+	TrainingPack(fs::path filepath, int offense, int defense, int numDrills, string code,
+		string creator, string creatorID, string description, string notes,
+		string youtube, unordered_set<string> tags);
 	char* save();
 	void addBallLocation(BallWrapper ball);
 	void setBallMovement(BallWrapper ball);
@@ -121,9 +124,9 @@ public:
 	bool allPlayersInDrillAdded();
 	bool expectingMoreDrills();
 
-	bool setTags(std::vector<std::string> tags);
-	void addTag(std::string tag);
-	void removeTag(std::string tag);
+	bool setTags(vector<string> tags);
+	void addTag(string tag);
+	void removeTag(string tag);
 
 	int expected_drills;
 	int players_added = 0;
@@ -137,7 +140,7 @@ public:
 
 struct TrainingPackPlayerWithRole {
 	TrainingPackPlayer player;
-	std::string role;
+	string role;
 };
 
 void from_json(const json& j, TrainingPack& p);

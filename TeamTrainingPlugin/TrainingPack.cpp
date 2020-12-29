@@ -6,20 +6,23 @@
 TrainingPack::TrainingPack() : TrainingPack(fs::path()) {};
 
 
-TrainingPack::TrainingPack(fs::path filepath, int offense, int defense, std::string description, std::string creator, std::string code,
-	std::string creatorID, std::vector<std::string> tags, int num_drills) :
-	filepath(filepath), offense(offense), defense(defense), description(description), creator(creator), code(code),
-	creatorID(creatorID), uploader(""), uploaderID(""), uploadID(NO_UPLOAD_ID), expected_drills(num_drills), players_added(0)
+TrainingPack::TrainingPack(fs::path filepath, int offense, int defense, int numDrills, string code,
+	string creator, string creatorID, string description, string notes,
+	string youtube, unordered_set<string> tags) :
+	filepath(filepath), offense(offense), defense(defense), numDrills(numDrills), expected_drills(numDrills),
+	code(code), creator(creator), creatorID(creatorID), description(description), notes(notes), youtube(youtube),
+	uploader(""), uploaderID(""), uploadID(NO_UPLOAD_ID), players_added(0)
 {
 	for (auto tag : tags) {
 		this->tags.insert(tag);
 	}
 }
 
-TrainingPack::TrainingPack(fs::path filepath) : filepath(filepath), version(0), offense(0), defense(0), description(""), creator(""), code(""),
-	creatorID(""), uploader(""), uploaderID(""), uploadID(NO_UPLOAD_ID), expected_drills(0)
+TrainingPack::TrainingPack(fs::path filepath) : filepath(filepath), version(0), offense(0), defense(0),
+	numDrills(0), description(""), creator(""), code(""), creatorID(""), uploader(""), uploaderID(""),
+	uploadID(NO_UPLOAD_ID), expected_drills(0)
 {
-	load_time = std::chrono::system_clock::now();
+	load_time = chrono::system_clock::now();
 
 	if (filepath.empty()) {
 		return;
@@ -29,10 +32,10 @@ TrainingPack::TrainingPack(fs::path filepath) : filepath(filepath), version(0), 
 		errorMsg = "Pack not found";
 	}
 
-	std::ifstream inFile;
+	ifstream inFile;
 	inFile.open(filepath);
 
-	std::stringstream ss;
+	stringstream ss;
 	ss << inFile.rdbuf();
 
 	json js;
@@ -59,14 +62,14 @@ char *TrainingPack::save()
 
 	version = LATEST_TRAINING_PACK_VERSION;
 
-	std::ofstream file;
+	ofstream file;
 	file.open(filepath);
 	if (file.fail()) {
 		return strerror(errno);
 	}
 	else {
 		json j(*this);
-		file << j.dump(2) << std::endl;
+		file << j.dump(2) << endl;
 	}
 
 	return NULL;
@@ -141,7 +144,7 @@ bool TrainingPack::expectingMoreDrills()
 }
 
 // Sets tags to given tags, and returns true if they are different than the current tags
-bool TrainingPack::setTags(std::vector<std::string> newTags)
+bool TrainingPack::setTags(vector<string> newTags)
 {
 	bool isDiff = newTags.size() != tags.size();
 	if (!isDiff) {
@@ -165,12 +168,12 @@ bool TrainingPack::setTags(std::vector<std::string> newTags)
 	return isDiff;
 }
 
-void TrainingPack::addTag(std::string tag)
+void TrainingPack::addTag(string tag)
 {
 	tags.insert(tag);
 }
 
-void TrainingPack::removeTag(std::string tag)
+void TrainingPack::removeTag(string tag)
 {
 	tags.erase(tag);
 }
@@ -226,14 +229,14 @@ void from_json(const json& j, TrainingPack& p)
 	}
 
 	// Tags can be added to older packs so don't assume version here
-	p.tags = std::unordered_set<std::string>();
+	p.tags = unordered_set<string>();
 	if (j.find("tags") != j.end()) {
 		for (json tag : j["tags"]) {
-			p.tags.insert(tag.get<std::string>());
+			p.tags.insert(tag.get<string>());
 		}
 	}
 
-	p.drills = std::vector<TrainingPackDrill>();
+	p.drills = vector<TrainingPackDrill>();
 	if (j.find("drills") != j.end() && j["drills"].size() > 0) { // Could just be custom training metadata
 		for (json drill : j["drills"]) {
 			p.drills.push_back(drill.get<TrainingPackDrill>());

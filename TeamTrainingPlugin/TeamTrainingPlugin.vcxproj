@@ -139,6 +139,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="cpp-httplib\httplib.h" />
+    <ClInclude Include="GUIStates.h" />
     <ClInclude Include="imgui\imconfig.h" />
     <ClInclude Include="imgui\imgui.h" />
     <ClInclude Include="imgui\imguivariouscontrols.h" />
@@ -158,6 +159,7 @@
     <ClInclude Include="TrainingPack.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="GUIStates.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imguivariouscontrols.cpp" />
     <ClCompile Include="imgui\imgui_additions.cpp" />

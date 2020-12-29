@@ -5,19 +5,14 @@
 #define WIN32_LEAN_AND_MEAN
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 
-#include "cpp-httplib/httplib.h"
-
-#include <fstream>
-
 #include "bakkesmod/plugin/bakkesmodplugin.h"
 #include "bakkesmod/plugin/pluginwindow.h"
-
 #include "imgui/imgui.h"
-
 #include "TrainingPack.h"
+#include "cpp-httplib/httplib.h"
+#include "GUIStates.h"
 
-#include <boost/thread/mutex.hpp>
-#include <boost/noncopyable.hpp>
+#include <fstream>
 #include <filesystem>
 
 using namespace std;
@@ -28,9 +23,6 @@ constexpr auto SERVER_URL = "http://localhost:8000"; // TODO: Make this a cvar?
 constexpr int MAX_BALL_TICK_FAILURES = 3;
 constexpr int MAX_BALL_VELOCITY_ZERO = 5;
 
-constexpr int MAX_FILENAME_LENGTH = 128;
-constexpr int MAX_DESCRIPTION_LENGTH = 500;
-constexpr int MAX_CREATOR_LENGTH = 128;
 constexpr int NUM_TAG_COLUMNS = 5;
 
 constexpr int MAX_SECONDS_SINCE_TEM_FILE_CREATED = 15;
@@ -38,269 +30,6 @@ constexpr int MAX_SECONDS_SINCE_TEM_FILE_CREATED = 15;
 constexpr auto CUSTOM_TRAINING_LOADED_EVENT = "Function TAGame.GameEvent_TrainingEditor_TA.StartPlayTest";
 
 const string CVAR_PREFIX("cl_team_training_");
-
-/*
- * State stuff needed for GUI
- */
-
-// TODO: This evolved into ugliness, fix it...
-class TagsState : private boost::noncopyable
-{
-public:
-
-	// Prepares tag state for being refreshed with tags and marks it as being refreshed
-	void refresh() {
-		oldTags.clear();
-		for (auto it = tags.begin(); it != tags.end(); ++it) {
-			oldTags[it->first] = it->second;
-		}
-		resetState();
-		is_downloading = true;
-	}
-
-	bool isRefreshing() {
-		return is_downloading;
-	}
-
-	void retry() {
-		resetState();
-		is_downloading = true;
-	}
-
-	void cancel() {
-		resetState();
-		for (auto it = oldTags.begin(); it != oldTags.end(); ++it) {
-			tags[it->first] = it->second;
-		}
-		oldTags.clear();
-	}
-
-	void setTags(map<string, bool> newTags) {
-		tags.clear();
-		addTags(newTags);
-	}
-
-	void addTags(map<string, bool> newTags) {
-		for (auto it = newTags.begin(); it != newTags.end(); ++it) {
-			if (tags.find(it->first) == tags.end()) {
-				tags[it->first] = false;
-			}
-		}
-	}
-
-	void addTags(vector<string> newTags) {
-		for (auto& tag : newTags) {
-			if (tags.find(tag) == tags.end()) {
-				tags[tag] = false;
-			}
-		}
-	}
-
-	void unmarkTags() {
-		for (auto it = tags.begin(); it != tags.end(); ++it) {
-			it->second = false;
-		}
-	}
-
-	void resetState() {
-		has_downloaded = false;
-		is_downloading = false;
-		failed = false;
-		cancelled = false;
-		progress = 0;
-		error = "";
-		tags.clear();
-	}
-
-	void restoreSelected() {
-		for (auto it = oldTags.begin(); it != oldTags.end(); ++it) {
-			if (it->second) {
-				auto newIt = tags.find(it->first);
-				if (newIt != tags.end()) {
-					tags[it->first] = true;
-				}
-			}
-		}
-	}
-
-	// Add tags to be enabled after refreshing or initial loading of tags
-	void enableTagsPending(unordered_set<string> tags) {
-		pendingEnabledTags.clear();
-		for (auto& tag : tags) {
-			pendingEnabledTags.push_back(tag);
-		}
-	}
-
-	void undoEdits() {
-		// Cancelling the tag edits, though a refresh of the tags could cause changes (in the case where a previously selected tag was removed from the list of retrieved tags)
-		for (auto it = tags.begin(); it != tags.end(); ++it) {
-			tags[it->first] = false;
-		}
-		for (auto it = beforeEditEnabledTags.begin(); it != beforeEditEnabledTags.end(); ++it) {
-			if (tags.find(*it) != tags.end()) {
-				tags[*it] = true;
-			}
-		}
-	}
-
-	vector<string> GetEnabledTags() const;
-
-	bool has_downloaded;
-	bool is_downloading;
-	bool failed;
-	bool cancelled;
-	float progress;
-	string error;
-	vector<string> pendingEnabledTags;    // Tags to be enabled after refreshing or first time loading them
-	vector<string> beforeEditEnabledTags; // If user cancels editing the tags, reset them
-	map<string, bool> tags;               // Tag => is enabled?
-	map<string, bool> oldTags;            // Old tag => is enabled? mapping so we can restore if user cancels refresh or it fails
-	boost::mutex mutex;
-};
-
-class SearchFilterState : private boost::noncopyable {
-public:
-	SearchFilterState() : description(""), creator(""), code(""), offense(0), defense(0) {};
-
-	void clear() {
-		description[0] = 0;
-		creator[0] = 0;
-		code[0] = 0;
-		offense = 0;
-		defense = 0;
-		tagsState.unmarkTags();
-	}
-
-	char description[MAX_DESCRIPTION_LENGTH];
-	char creator[MAX_CREATOR_LENGTH];
-	char code[20];
-	int offense;
-	int defense;
-
-	TagsState tagsState;
-};
-
-class SearchState : private boost::noncopyable
-{
-public:
-	SearchState() : is_searching(false), failed(false), error(""), mutex() {};
-
-	void newSearch() {
-		resetState();
-		is_searching = true;
-	}
-
-	void resetState() {
-		is_searching = false;
-		failed = false;
-		error = "";
-	}
-
-	SearchFilterState filters;
-	vector<TrainingPackDBMetaData> packs;
-
-	bool is_searching;
-	bool failed;
-	string error;
-	boost::mutex mutex;
-};
-
-class DownloadState : private boost::noncopyable
-{
-public:
-	DownloadState() : stage(""), is_downloading(false), failed(false), cancelled(false), progress(0), error(""), pack_id(NO_UPLOAD_ID), pack_description(""), temFName(""), mutex() {};
-
-	void newPack(int id, string code, string description) {
-		resetState();
-		stage = "";
-		pack_id = id;
-		pack_code = code;
-		pack_description = description;
-		is_downloading = true;
-	}
-
-	void resetState() {
-		stage = "";
-		is_downloading = false;
-		failed = false;
-		cancelled = false;
-		progress = 0;
-		error = "";
-	}
-
-	string stage;
-	bool is_downloading;
-	bool failed;
-	bool cancelled;
-	float progress;
-	string error;
-	int pack_id;
-	string pack_code;
-	string pack_description;
-	string temFName;
-	boost::mutex mutex;
-};
-
-class UploadState : private boost::noncopyable
-{
-public:
-	UploadState() : is_uploading(false), failed(false), cancelled(false), progress(0), error(""), pack_path(fs::path()), pack_code(""), pack_description(""), mutex() {};
-
-	void newPack(TrainingPack pack) {
-		resetState();
-		pack_path = pack.filepath;
-		pack_code = pack.code;
-		pack_description = pack.description;
-		is_uploading = true;
-	};
-
-	void resetState() {
-		is_uploading = false;
-		failed = false;
-		cancelled = false;
-		progress = 0;
-		error = "";
-	}
-
-	bool is_uploading;
-	bool failed;
-	bool cancelled;
-	float progress;
-	string error;
-	fs::path pack_path;
-	string pack_code;
-	string pack_description;
-	string uploaderID;
-	string uploader;
-	boost::mutex mutex;
-};
-
-class UploadFavoritesState : private boost::noncopyable
-{
-public:
-	UploadFavoritesState() : was_started(false), is_running(false), failed(false), cancelled(false), progress(0), error("") {};
-
-	void resetState() {
-		was_started = false;
-		is_running = false;
-		failed = false;
-		cancelled = false;
-		progress = 0;
-		error = "";
-		packsInProgress.clear();
-		packsCompleted.clear();
-	}
-
-	bool was_started;
-	bool is_running;
-	bool failed;
-	bool cancelled;
-	float progress;
-	string error;
-
-	unordered_set<string> packsInProgress;
-	unordered_set<string> packsCompleted;
-};
 
 class TeamTrainingPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginWindow
 {
@@ -352,7 +81,6 @@ private:
  * Training Pack Conversion
  */
 private:
-	void internalConvert(std::vector<std::string> params);
 	void onNextRound(std::string eventName);
 	void onBallTick(std::string eventName);
 	void getNextShot();
@@ -380,6 +108,8 @@ private:
 		{ "Creation", {}},
 	};
 	std::string packDataPath = "";
+	string uploader;
+	string uploaderID;
 	// Selection
 	char addByCode[20] = "";
 	char customTag[128] = "";
@@ -391,13 +121,18 @@ private:
 	int downloadSelectedPackIdx = 0;
 	SearchState searchState;
 	// Creation
+	InGameTrainingPackData inGameTrainingPackData;
 	int offensive_players = 0;
 	int defensive_players = 0;
 	int gui_num_drills = 1;
 	char filename[MAX_FILENAME_LENGTH] = "";
-	char creator[MAX_CREATOR_LENGTH] = "";
-	char description[MAX_DESCRIPTION_LENGTH] = "";
 	char code[20] = "";
+	char creator[MAX_CREATOR_LENGTH] = "";
+	char creatorID[MAX_CREATOR_ID_LENGTH] = "";
+	char description[MAX_DESCRIPTION_LENGTH] = "";
+	char creatorNotes[MAX_NOTES_LENGTH] = "";
+	char youtubeLink[MAX_YOUTUBE_LENGTH] = "";
+	vector<string> enabledTags;
 	// Settings
 	char countdown[10] = "1.0";
 
@@ -449,11 +184,11 @@ private:
 
 	void addPackByTemFNameThread();
 
+	void onCustomTrainingLoaded(string event);
+
 	TagsState localEditTagsState;
 	SearchState localFilterState;
 	UploadFavoritesState uploadFavsState;
 	UploadState uploadState;
 	DownloadState downloadState;
 };
-
-void to_json(json& j, const SearchFilterState& s);

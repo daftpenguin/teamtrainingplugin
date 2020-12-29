@@ -75,12 +75,6 @@ void TeamTrainingPlugin::onLoad()
 	cvarManager->registerNotifier("team_train_cycle_players",
 		std::bind(&TeamTrainingPlugin::cyclePlayers, this, std::placeholders::_1),
 		"Cycles the assignments of players to roles", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
-
-	// Creation
-	cvarManager->registerNotifier("team_train_internal_convert", 
-		std::bind(&TeamTrainingPlugin::internalConvert, this, std::placeholders::_1),
-		"Converts custom training pack into team training pack (intended for internal use through GUI)",
-		PERMISSION_CUSTOM_TRAINING | PERMISSION_PAUSEMENU_CLOSED);
 	
 	// Variables
 	cvarManager->registerCvar(CVAR_PREFIX + "countdown", "1", "Time to wait until shot begins", true, true, 0, true, 10, true);
@@ -88,6 +82,12 @@ void TeamTrainingPlugin::onLoad()
 		false, false, 0, 0, 0, true);
 
 	gameWrapper->LoadToastTexture("teamtraining1", gameWrapper->GetDataFolder() / "assets" / "teamtraining_logo.png");
+
+	auto pname = gameWrapper->GetPlayerName();
+	if (!pname.IsNull()) uploader = pname.ToString();
+	uploaderID = UIDToString(gameWrapper->GetUniqueID());
+
+	gameWrapper->HookEventPost(CUSTOM_TRAINING_LOADED_EVENT, bind(&TeamTrainingPlugin::onCustomTrainingLoaded, this, placeholders::_1));
 
 	/*gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
 		"Function TAGame.GameEvent_TA.AddCar",
@@ -529,33 +529,6 @@ bool TeamTrainingPlugin::validatePlayers(ArrayWrapper<CarWrapper> cars)
 
 /* For extracting custom training pack to team training pack */
 
-void TeamTrainingPlugin::internalConvert(std::vector<std::string> params)
-{
-	if (!gameWrapper->IsInCustomTraining()) {
-		cvarManager->log("Not in custom training");
-		return;
-	}
-
-	int offense = std::atoi(params[1].c_str());
-	int defense = std::atoi(params[2].c_str());
-	int num_drills = std::atoi(params[3].c_str());
-	std::string filename = params[4];
-	std::string creator = params[5];
-	std::string description = params[6];
-	std::string code = params[7];
-
-	// TODO: Fill these in
-	std::string creatorID = "";
-	std::string uploader = "";
-	std::string uploaderID = "";
-	std::vector<std::string> tags;
-	
-	conversion_pack = TrainingPack(getPackDataPath(filename), offense, defense, description, creator, code, creatorID, tags, num_drills);
-	conversion_pack.startNewDrill();
-	getNextShotCalled = 0;
-	getNextShot();
-}
-
 void TeamTrainingPlugin::getNextShot()
 {
 	if (conversion_pack.data_saved) {
@@ -696,6 +669,47 @@ void TeamTrainingPlugin::onBallTick(std::string eventName)
 			std::bind(&TeamTrainingPlugin::onNextRound, this, std::placeholders::_1));
 		cvarManager->executeCommand("sv_training_next");
 	}
+}
+
+void TeamTrainingPlugin::onCustomTrainingLoaded(string event)
+{
+	gameWrapper->SetTimeout([this](GameWrapper* gw) {
+		// It seems this data is more reliably available if we wait a second
+		inGameTrainingPackData.resetState();
+		inGameTrainingPackData.failed = true;
+
+		if (!gw->IsInCustomTraining()) {
+			return;
+		}
+
+		auto te = TrainingEditorWrapper(gw->GetGameEventAsServer().memory_address);
+		if (te.IsNull()) {
+			return;
+		}
+
+		auto td = te.GetTrainingData();
+		if (td.GetbUnowned() != 1) {
+			return;
+		}
+
+		auto tdd = td.GetTrainingData();
+
+		auto code = tdd.GetCode();
+		if (!code.IsNull()) ::strncpy(inGameTrainingPackData.code, code.ToString().c_str(), sizeof(inGameTrainingPackData.code));
+
+		auto description = tdd.GetTM_Name();
+		if (!description.IsNull()) ::strncpy(inGameTrainingPackData.description, description.ToString().c_str(), sizeof(inGameTrainingPackData.description));
+
+		auto creator = tdd.GetCreatorName();
+		if (!creator.IsNull()) ::strncpy(inGameTrainingPackData.creator, creator.ToString().c_str(), sizeof(inGameTrainingPackData.creator));
+
+		auto creatorID = UIDToString(tdd.GetCreatorPlayerUniqueID());
+		::strncpy(inGameTrainingPackData.creatorID, creatorID.c_str(), sizeof(inGameTrainingPackData.creatorID));
+
+		inGameTrainingPackData.numDrills = te.GetTotalRounds();
+
+		inGameTrainingPackData.failed = false;
+		}, 1.0f);
 }
 
 static inline bool dir_exists(const char *dirpath)

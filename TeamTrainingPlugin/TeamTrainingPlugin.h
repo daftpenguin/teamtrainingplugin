@@ -19,7 +19,7 @@ using namespace std;
 namespace fs = std::filesystem;
 
 constexpr auto PLUGIN_VERSION = "0.3.0";
-constexpr auto SERVER_URL = "http://localhost:8000"; // TODO: Make this a cvar?
+constexpr auto SERVER_URL = "https://www.daftpenguin.com"; // TODO: Make this a cvar?
 constexpr int MAX_BALL_TICK_FAILURES = 3;
 constexpr int MAX_BALL_VELOCITY_ZERO = 5;
 

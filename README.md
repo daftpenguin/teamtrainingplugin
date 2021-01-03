@@ -46,6 +46,13 @@ Set `cl_team_training` to 1 to randomize the shots in the training pack, and `cl
 
 # Changelog
 
+v0.3.0
+* Added the ability to search, download, and share any team training and custom training packs
+* Added support for tags to organize training packs
+* Added support for custom training metadata for organizing and downloading custom training packs
+* Added button to add custom training packs via code and add all favorited packs
+* Fixed issue with non-ascii characters not showing in UI
+
 v0.2.8
 * Updated to work with upcoming Epic Games support
 

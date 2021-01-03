@@ -10,6 +10,8 @@
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
+#include <boost/locale.hpp>
+
 // WARNING: It gets really ugly below...
 
 // TODO: Prevent users from uploading too frequently (in server code, not here) - by IP, by steamID...
@@ -23,6 +25,24 @@
 
 using namespace std;
 
+// TODO: Use this for later update to convert all training pack related data
+std::string iso_8859_1_to_utf8(std::string str)
+{
+	string strOut;
+	for (std::string::iterator it = str.begin(); it != str.end(); ++it)
+	{
+		uint8_t ch = *it;
+		if (ch < 0x80) {
+			strOut.push_back(ch);
+		}
+		else {
+			strOut.push_back(0xc0 | ch >> 6);
+			strOut.push_back(0x80 | (ch & 0x3f));
+		}
+	}
+	return strOut;
+}
+
 int filenameFilter(ImGuiTextEditCallbackData* data) {
 	switch (data->EventChar) {
 	case ' ': case '"': case '*': case '<': case'>': case '?': case '\\': case '|': case '/': case ':':
@@ -34,14 +54,7 @@ int filenameFilter(ImGuiTextEditCallbackData* data) {
 
 void copyToClipboard(string data)
 {
-	const size_t len = data.size();
-	HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, len);
-	memcpy(GlobalLock(hMem), data.c_str(), len);
-	GlobalUnlock(hMem);
-	OpenClipboard(0);
-	EmptyClipboard();
-	SetClipboardData(CF_TEXT, hMem);
-	CloseClipboard();
+	ImGui::SetClipboardText(data.c_str());
 }
 
 bool isValidPackCode(string code)
@@ -269,7 +282,7 @@ void TeamTrainingPlugin::Render()
 			ImGui::EndTabItem();
 		}
 
-		if (ImGui::BeginTabItem("Download Packs (beta)")) {
+		if (ImGui::BeginTabItem("Download")) {
 			AddSearchFilters(searchState.filters, "Downloads", true,
 				std::bind(&TeamTrainingPlugin::downloadTagsThread, this, std::placeholders::_1),
 				std::bind(&TeamTrainingPlugin::SearchPacks, this, std::placeholders::_1));
@@ -289,7 +302,7 @@ void TeamTrainingPlugin::Render()
 			}
 			else {
 				// Left Selection
-				ImGui::BeginChild("left pane", ImVec2(150, 0), true);
+				ImGui::BeginChild("left pane", ImVec2(300, 0), true);
 				int i = 0;
 				for (auto pack : searchState.packs) {
 					if (ImGui::Selectable((pack.description + "##" + to_string(i)).c_str(), downloadSelectedPackIdx == i)) {
@@ -430,13 +443,14 @@ void TeamTrainingPlugin::Render()
 				if (!inGameTrainingPackData.failed && ::strcmp(inGameTrainingPackData.code, code) != 0) {
 					::strncpy(filename, inGameTrainingPackData.code, sizeof(code));
 					::strncpy(code, inGameTrainingPackData.code, sizeof(code));
-					::strncpy(creator, inGameTrainingPackData.creator, sizeof(creator));
 					::strncpy(creatorID, inGameTrainingPackData.creatorID, sizeof(creatorID));
-					::strncpy(description, inGameTrainingPackData.description, sizeof(description));
 					gui_num_drills = inGameTrainingPackData.numDrills;
 					offensive_players = 1;
 					defensive_players = 0;
 					enabledTags.clear();
+
+					::strncpy(creator, iso_8859_1_to_utf8(inGameTrainingPackData.creator).c_str(), sizeof(creator));
+					::strncpy(description, iso_8859_1_to_utf8(inGameTrainingPackData.description).c_str(), sizeof(description));
 				}
 			}
 
@@ -473,7 +487,7 @@ void TeamTrainingPlugin::Render()
 				ImGui::OpenPopup("Edit Tags");
 			}
 			ImGui::SameLine();
-			ImGui::TextWrapped("Tags: %s", boost::join(enabledTags, ",").c_str());
+			ImGui::TextWrapped("Tags: %s", boost::join(enabledTags, ", ").c_str());
 
 			ShowTagsWindow(localEditTagsState, true, std::bind(&TeamTrainingPlugin::loadAllTagsThread, this, placeholders::_1),
 				[this](TagsState& state) {
@@ -570,6 +584,20 @@ void TeamTrainingPlugin::Render()
 				cvarManager->getCvar(CVAR_PREFIX + "last_version_loaded").setValue(PLUGIN_VERSION);
 			}
 
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+			ImGui::TextWrapped("The v0.3.0 update introduces many features that I have been working on for the past 4-5 months. If you notice any issues at all, please let me know as there are definitely some bugs that need to be worked out.");
+			ImGui::PopStyleColor();
+
+			ImGui::TextWrapped("v0.3.0 (Jan 2 2021)");
+			ImGui::TextWrapped("Changelog:");
+			ImGui::BulletText("Added the ability to search, download, and share any team trainingand custom training packs");
+			ImGui::BulletText("Added support for tags to organize training packs");
+			ImGui::BulletText("Added support for custom training metadata for organizingand downloading custom training packs");
+			ImGui::BulletText("Added button to add custom training packs via codeand add all favorited packs");
+			ImGui::BulletText("Fixed issue with non-ascii characters not showing in UI");
+
+			ImGui::Separator();
+
 			ImGui::TextWrapped("v0.2.8 (Dec 7 2020)");
 			ImGui::TextWrapped("Changelog:");
 			ImGui::BulletText("Updated to work with upcoming Epic Games support");
@@ -579,12 +607,6 @@ void TeamTrainingPlugin::Render()
 			ImGui::TextWrapped("v0.2.7 (Sep 4 2020)");
 			ImGui::TextWrapped("Changelog:");
 			ImGui::BulletText("Fixed bug causing crashes when variance is enabled");
-
-			ImGui::Separator();
-			
-			ImGui::TextWrapped("v0.2.6 (Sep 1 2020) changelog:");
-			ImGui::BulletText("Updated link from old bakkesmod.lib to new pluginsdk.lib");
-			ImGui::BulletText("Added support for drill shuffling and variance in drills using BakkesMod's built-in custom training options");
 
 			ImGui::Separator();
 
@@ -1489,60 +1511,60 @@ void TeamTrainingPlugin::addPackByCodeThread(bool isRetry)
 	// TODO: Generalize the uploading Tem and downloading pack procedure for adding favs and adding by code
 	downloadState.stage = "Server does not have pack data. Loading training pack in-game to upload it to the server. This will take a few seconds.";
 
+	// TODO: Figure out why hooking on the game event stopped working.
+	// Probably related to the other handler attached to the same event, even though unhooking and hooking this one didn't work.
+	// Maybe we will need to add a single handler and determine if this needs to be called.
+	gameWrapper->SetTimeout([this](GameWrapper* gw) {
+		cvarManager->log("Timeout triggered");
+		if (!gw->IsInCustomTraining()) {
+			downloadState.error = "Failed to load custom training pack. Either code was invalid or Rocket League failed to download the pack from their servers.";
+			cvarManager->log(downloadState.error);
+			downloadState.failed = true;
+			return;
+		}
+
+		auto te = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address);
+		if (te.IsNull()) {
+			downloadState.error = "Failed to get training pack data from game.";
+			cvarManager->log(downloadState.error);
+			downloadState.failed = true;
+			return;
+		}
+
+		auto tdd = te.GetTrainingData().GetTrainingData();
+		auto code = tdd.GetCode();
+		if (code.IsNull()) {
+			downloadState.error = "Failed to get training pack code from game.";
+			cvarManager->log(downloadState.error);
+			downloadState.failed = true;
+			return;
+		}
+
+		if (code.ToString().compare(downloadState.pack_code) != 0) {
+			downloadState.error = "Failed to load custom training pack. Either code was invalid or Rocket League failed to download the pack from their servers.";
+			cvarManager->log(downloadState.error);
+			downloadState.failed = true;
+			return;
+		}
+
+		auto fnameUnreal = te.GetTrainingFileName();
+		if (fnameUnreal.IsNull()) {
+			downloadState.error = "Failed to get training pack file from game.";
+			cvarManager->log(downloadState.error);
+			downloadState.failed = true;
+			return;
+		}
+
+		downloadState.temFName = fnameUnreal.ToString();
+
+		if (downloadState.cancelled) {
+			return;
+		}
+
+		boost::thread t{ &TeamTrainingPlugin::addPackByTemFNameThread, this };
+		}, 5.0f);
+
 	cvarManager->executeCommand("sleep 1; load_training " + downloadState.pack_code);
-
-	cvarManager->log("Setting timeout");
-
-	gameWrapper->HookEventPost(CUSTOM_TRAINING_LOADED_EVENT, [this](string eventName) {
-		gameWrapper->SetTimeout([this](GameWrapper* gw) { // This code seems to fail sometimes without the timeout
-			if (!gw->IsInCustomTraining()) {
-				downloadState.error = "Failed to load custom training pack. Either code was invalid or Rocket League failed to download the pack from their servers.";
-				cvarManager->log(downloadState.error);
-				downloadState.failed = true;
-				return;
-			}
-
-			auto te = TrainingEditorWrapper(gameWrapper->GetGameEventAsServer().memory_address);
-			if (te.IsNull()) {
-				downloadState.error = "Failed to get training pack data from game.";
-				cvarManager->log(downloadState.error);
-				downloadState.failed = true;
-				return;
-			}
-
-			auto tdd = te.GetTrainingData().GetTrainingData();
-			auto code = tdd.GetCode();
-			if (code.IsNull()) {
-				downloadState.error = "Failed to get training pack code from game.";
-				cvarManager->log(downloadState.error);
-				downloadState.failed = true;
-				return;
-			}
-
-			if (code.ToString().compare(downloadState.pack_code) != 0) {
-				downloadState.error = "Failed to load custom training pack. Either code was invalid or Rocket League failed to download the pack from their servers.";
-				cvarManager->log(downloadState.error);
-				downloadState.failed = true;
-				return;
-			}
-
-			auto fnameUnreal = te.GetTrainingFileName();
-			if (fnameUnreal.IsNull()) {
-				downloadState.error = "Failed to get training pack file from game.";
-				cvarManager->log(downloadState.error);
-				downloadState.failed = true;
-				return;
-			}
-
-			downloadState.temFName = fnameUnreal.ToString();
-
-			if (downloadState.cancelled) {
-				return;
-			}
-
-			boost::thread t{ &TeamTrainingPlugin::addPackByTemFNameThread, this };
-			}, 1.0f);
-		});
 }
 
 void TeamTrainingPlugin::ShowAddByCodeModal()
@@ -1711,7 +1733,7 @@ void TeamTrainingPlugin::addPackByTemFNameThread()
 	stringstream dataSS;
 	bool packExists;
 
-	auto downRes = cli.Get(("/api/rocket-league/teamtraining/download?code=" + to_string(pack_id)).c_str(), httplib::Headers(),
+	auto downRes = cli.Get(("/api/rocket-league/teamtraining/download?id=" + to_string(pack_id)).c_str(), httplib::Headers(),
 		[&](const httplib::Response& r) {
 			packExists = r.status == 200; // Don't update progress if we're not downloading the pack
 			return true;

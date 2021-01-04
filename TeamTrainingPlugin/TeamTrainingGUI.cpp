@@ -588,6 +588,10 @@ void TeamTrainingPlugin::Render()
 			ImGui::TextWrapped("The v0.3.0 update introduces many features that I have been working on for the past 4-5 months. If you notice any issues at all, please let me know as there are definitely some bugs that need to be worked out.");
 			ImGui::PopStyleColor();
 
+			ImGui::TextWrapped("v0.3.1 (Jan 3 2021)");
+			ImGui::TextWrapped("Changelog:");
+			ImGui::BulletText("Fixed bug preventing plugin from being loaded");
+
 			ImGui::TextWrapped("v0.3.0 (Jan 2 2021)");
 			ImGui::TextWrapped("Changelog:");
 			ImGui::BulletText("Added the ability to search, download, and share any team trainingand custom training packs");

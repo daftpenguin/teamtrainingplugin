@@ -1,6 +1,8 @@
 // TODO: Fix my fucking coding style... camelCase or underscores. capitalize methods or don't. ffs pick one holy shit
 #pragma once
 #pragma comment(lib, "pluginsdk.lib")
+#pragma comment(lib, "crypt32.lib")
+#pragma comment(lib, "ws2_32.lib")
 
 #define WIN32_LEAN_AND_MEAN
 #define CPPHTTPLIB_OPENSSL_SUPPORT
@@ -18,7 +20,7 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-constexpr auto PLUGIN_VERSION = "0.3.0";
+constexpr auto PLUGIN_VERSION = "0.3.1";
 constexpr auto SERVER_URL = "https://www.daftpenguin.com"; // TODO: Make this a cvar?
 constexpr int MAX_BALL_TICK_FAILURES = 3;
 constexpr int MAX_BALL_VELOCITY_ZERO = 5;

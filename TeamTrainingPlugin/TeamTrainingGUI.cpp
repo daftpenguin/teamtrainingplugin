@@ -23,6 +23,7 @@
 // TODO: How to determine which packs were downloaded vs created? How to determine which packs can be uploaded?
 // TODO: Notes and other data should be updateable by both creator and uploader?
 
+namespace fs = std::filesystem;
 using namespace std;
 
 // TODO: Use this for later update to convert all training pack related data
@@ -175,8 +176,8 @@ void TeamTrainingPlugin::Render()
 						if (ImGui::Button("Load Team Training Pack")) {
 							errorMsgs["Selection"].clear();
 
-							if (!gameWrapper->IsInFreeplay()) {
-								errorMsgs["Selection"].push_back("You must be in a freeplay session to load a training pack. Use Rocket plugin to launch a multiplayer freeplay session with non-local players.");
+							if (!isValidServer()) {
+								errorMsgs["Selection"].push_back("You must be the host in a freeplay session or LAN match to load a training pack. Use Rocket plugin to launch a multiplayer session with non-local players.");
 							}
 							else {
 								auto cars = gameWrapper->GetGameEventAsServer().GetCars();
@@ -223,6 +224,7 @@ void TeamTrainingPlugin::Render()
 					if (ImGui::Button("Edit Tags##Selection")) {
 						if (!localEditTagsState.has_downloaded) {
 							localEditTagsState.enableTagsPending(pack.tags);
+							cvarManager->log("launching loadAllTagsThread");
 							boost::thread t{ &TeamTrainingPlugin::loadAllTagsThread, this, boost::ref(localEditTagsState) };
 						}
 						else {
@@ -355,8 +357,8 @@ void TeamTrainingPlugin::Render()
 		if (ImGui::BeginTabItem("Player Roles")) {
 			if (!this->pack) {
 				ImGui::Text("No pack loaded");
-			} else if (!gameWrapper->IsInFreeplay()) {
-				ImGui::Text("Not in freeplay");
+			} else if (!isValidServer()) {
+				ImGui::Text("Must be host of a freeplay session or LAN match");
 			} else {
 				ImGui::TextWrapped("Drag a player's name onto another player's name to swap their roles.");
 				ImGui::TextWrapped("Player role assignments are based on their order as they are \"seen\" by the server.");
@@ -475,6 +477,7 @@ void TeamTrainingPlugin::Render()
 			if (ImGui::Button("Edit Tags##Creation")) {
 				if (!localEditTagsState.has_downloaded) {
 					localEditTagsState.enableTagsPending(enabledTags);
+					cvarManager->log("launching loadAllTagsThread");
 					boost::thread t{ &TeamTrainingPlugin::loadAllTagsThread, this, boost::ref(localEditTagsState) };
 				}
 				else {
@@ -562,9 +565,20 @@ void TeamTrainingPlugin::Render()
 			ImGui::TextWrapped("This plugin now utilizes the automatic shuffling and shot variance settings set in BakkesMod's Custom Training settings (F2 -> Custom Training tab).");
 			ImGui::Separator();
 			ImGui::InputText("Countdown after reset (in seconds)", countdown, IM_ARRAYSIZE(countdown), ImGuiInputTextFlags_CharsScientific);
+			ImGui::Checkbox("Freeze players during countdown", &netcodeEnabled);
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+			ImGui::TextWrapped("This feature requires ALL players in the lobby to have the latest version of the Team Training plugin installed and running. For easy install/update, open the plugin manager UI through plugins section of F2 menu, and install by ID 99.");
+			ImGui::TextWrapped("Consider this feature as experimental as I have not yet determined all unusual events that may occur.");
+			ImGui::TextWrapped("If you have any issues with players not becoming unfrozen, any player in the lobby should be able to press the unstuck button to unfreeze everyone.");
+			ImGui::PopStyleColor();
+
+			if (ImGui::Button("Unstuck")) {
+				cvarManager->executeCommand("sleep 1; team_train_unstuck");
+			}
 
 			if (ImGui::Button("Save")) {
 				cvarManager->getCvar(CVAR_PREFIX + "countdown").setValue(countdown);
+				cvarManager->getCvar(CVAR_PREFIX + "netcode_enabled").setValue(netcodeEnabled);
 			}
 
 			ImGui::Separator();
@@ -587,6 +601,12 @@ void TeamTrainingPlugin::Render()
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
 			ImGui::TextWrapped("The v0.3.0 update introduces many features that I have been working on for the past 4-5 months. If you notice any issues at all, please let me know as there are definitely some bugs that need to be worked out.");
 			ImGui::PopStyleColor();
+
+			ImGui::TextWrapped("v0.3.2 (Jan 4 2021)");
+			ImGui::TextWrapped("Changelog:");
+			ImGui::BulletText("Fixed crash on null tags");
+			ImGui::BulletText("Added handling of invalid pack IDs returned when adding favorited packs");
+			ImGui::BulletText("Added workaround for when Epic UID returns as 0");
 
 			ImGui::TextWrapped("v0.3.1 (Jan 3 2021)");
 			ImGui::TextWrapped("Changelog:");
@@ -781,6 +801,7 @@ void TeamTrainingPlugin::SearchPacks(SearchFilterState& filters)
 {
 	searchState.newSearch();
 	searchState.packs.clear();
+	cvarManager->log("launching searchPacksThread");
 	boost::thread t{ &TeamTrainingPlugin::searchPacksThread, this, boost::ref(filters) };
 }
 
@@ -941,6 +962,7 @@ void TeamTrainingPlugin::DownloadPack(TrainingPackDBMetaData& pack)
 {
 	downloadState.newPack(pack.id, pack.code, pack.description);
 	ImGui::OpenPopup("Downloading");
+	cvarManager->log("launching downloadPackThread");
 	boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this, false };
 }
 
@@ -1022,6 +1044,7 @@ void TeamTrainingPlugin::UploadPack(const TrainingPack &pack)
 			uploadState.uploader = name.ToString();
 		}
 		uploadState.uploaderID = "EPIC:" + gw->GetEpicID();
+		cvarManager->log("launching uploadPackThread");
 		boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
 		});
 	ImGui::OpenPopup("Uploading");
@@ -1046,6 +1069,7 @@ void TeamTrainingPlugin::AddSearchFilters(
 		if (ImGui::Button(("Edit Tags##" + idPrefix + "EditTags").c_str())) {
 			if (!filterState.tagsState.has_downloaded) {
 				filterState.tagsState.refresh();
+				cvarManager->log("launching edit tags thread (passed in)");
 				boost::thread t{ tagLoader, boost::ref(filterState.tagsState) };
 			}
 			filterState.tagsState.beforeEditEnabledTags = filterState.tagsState.GetEnabledTags();
@@ -1094,6 +1118,7 @@ void TeamTrainingPlugin::ShowTagsWindow(TagsState& state, bool allowCustomTags,
 			if (showRetry) {
 				if (ImGui::Button("Retry", ImVec2(120, 0))) {
 					state.retry();
+					cvarManager->log("launching tagLoader thread (passed in)");
 					boost::thread t{ tagLoader, boost::ref(state) };
 				}
 				if (ImGui::Button("Cancel", ImVec2(120, 0))) {
@@ -1143,6 +1168,7 @@ void TeamTrainingPlugin::ShowTagsWindow(TagsState& state, bool allowCustomTags,
 		ImGui::SameLine();
 		if (ImGui::Button("Refresh Tags")) {
 			state.refresh();
+			cvarManager->log("launching tagLoader thread (passed in) 2");
 			boost::thread t{ tagLoader, boost::ref(state) };
 		}
 
@@ -1216,6 +1242,7 @@ void TeamTrainingPlugin::ShowFavoritedPacksWindow()
 void TeamTrainingPlugin::UploadFavoritedPacks()
 {
 	// This was meant to be used to set the favorites director inside of uploadFavsState, but couldn't figure out how to get that directory...
+	cvarManager->log("launching FavoritedPacksUploadThread");
 	boost::thread t{ &TeamTrainingPlugin::FavoritedPacksUploadThread, this };
 }
 
@@ -1382,7 +1409,7 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 			}
 		}
 
-		if (pack_id == NO_UPLOAD_ID || pack_code.empty()) {
+		if (pack_id == NO_UPLOAD_ID || pack_id == 0 || pack_code.empty()) {
 			state.failed = true;
 			state.error = "Received invalid pack ID (" + to_string(pack_id) + ") or pack code (" + pack_code + ")";
 			cvarManager->log(state.error);
@@ -1452,6 +1479,7 @@ void TeamTrainingPlugin::AddPackByCode(string code)
 
 	downloadState.newPack(NO_UPLOAD_ID, code, "");
 	ImGui::OpenPopup("Add By Code");
+	cvarManager->log("launching addPackByCodeThread");
 	boost::thread t{ &TeamTrainingPlugin::addPackByCodeThread, this, false };
 }
 
@@ -1565,6 +1593,7 @@ void TeamTrainingPlugin::addPackByCodeThread(bool isRetry)
 			return;
 		}
 
+		cvarManager->log("launching addPackByTemFNameThread");
 		boost::thread t{ &TeamTrainingPlugin::addPackByTemFNameThread, this };
 		}, 5.0f);
 
@@ -1599,6 +1628,7 @@ void TeamTrainingPlugin::ShowAddByCodeModal()
 		else if (showRetry) {
 			if (ImGui::Button("Retry", ImVec2(120, 0))) {
 				downloadState.resetState();
+				cvarManager->log("launching addPackByCodeThread 2");
 				boost::thread t{ &TeamTrainingPlugin::addPackByCodeThread, this, true };
 			}
 			ImGui::SameLine();
@@ -1799,6 +1829,7 @@ void TeamTrainingPlugin::ShowUploadingModal()
 		else if (showRetry) {
 			if (ImGui::Button("Retry", ImVec2(120, 0))) {
 				uploadState.resetState();
+				cvarManager->log("launching uploadPackThread");
 				boost::thread t{ &TeamTrainingPlugin::uploadPackThread, this };
 			}
 			ImGui::SameLine();
@@ -1841,6 +1872,7 @@ void TeamTrainingPlugin::ShowDownloadingModal() {
 		else if (showRetry) {
 			if (ImGui::Button("Retry", ImVec2(120, 0))) {
 				downloadState.resetState();
+				cvarManager->log("launching downloadPackThread");
 				boost::thread t{ &TeamTrainingPlugin::downloadPackThread, this, true };
 			}
 		}

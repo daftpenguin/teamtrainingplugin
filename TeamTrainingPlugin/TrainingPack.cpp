@@ -3,6 +3,9 @@
 #include <fstream>
 #include <sstream>
 
+using namespace std;
+namespace fs = std::filesystem;
+
 TrainingPack::TrainingPack() : TrainingPack(fs::path()) {};
 
 
@@ -204,26 +207,26 @@ void from_json(const json& j, TrainingPack& p)
 	if (p.version >= 4) { // Version 3 was for ball's angular field
 		j.at("creatorID").get_to(p.creatorID);
 
-		if (j.find("uploader") != j.end()) {
+		if (j.find("uploader") != j.end() && j["uploader"] != nullptr) {
 			j.at("uploader").get_to(p.uploader);
 		}
 
-		if (j.find("uploaderID") != j.end()) {
+		if (j.find("uploaderID") != j.end() && j["uploaderID"] != nullptr) {
 			j.at("uploaderID").get_to(p.uploaderID);
 		}
 
-		if (j.find("uploadID") == j.end()) {
+		if (j.find("uploadID") == j.end() || j["uploadID"] == nullptr) {
 			p.uploadID = NO_UPLOAD_ID;
 		}
 		else {
 			j.at("uploadID").get_to(p.uploadID);
 		}
 
-		if (j.find("notes") != j.end()) {
+		if (j.find("notes") != j.end() && j["notes"] != nullptr) {
 			j.at("notes").get_to(p.notes);
 		}
 
-		if (j.find("youtube") != j.end()) {
+		if (j.find("youtube") != j.end() && j["youtube"] != nullptr) {
 			j.at("youtube").get_to(p.youtube);
 		}
 	}
@@ -232,7 +235,9 @@ void from_json(const json& j, TrainingPack& p)
 	p.tags = unordered_set<string>();
 	if (j.find("tags") != j.end()) {
 		for (json tag : j["tags"]) {
-			p.tags.insert(tag.get<string>());
+			if (tag != nullptr) {
+				p.tags.insert(tag.get<string>());
+			}
 		}
 	}
 

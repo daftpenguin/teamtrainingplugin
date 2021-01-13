@@ -13,11 +13,12 @@
 #include <chrono>
 #include <cmath>
 #include <vector>
+#include <string>
+#include <openssl/crypto.h>
+#include <boost/algorithm/string.hpp>
 
-namespace fs = std::filesystem;
 using namespace std;
-
-#pragma comment (lib, "Ws2_32.lib")
+namespace fs = std::filesystem;
 
 BAKKESMOD_PLUGIN(TeamTrainingPlugin, "Team Training plugin", PLUGIN_VERSION, PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING)
 
@@ -51,50 +52,64 @@ std::string vectorToString(std::vector<int> v) {
 
 void TeamTrainingPlugin::onLoad()
 {
+	using namespace std::placeholders;
+	Netcode = std::make_shared<NetcodeManager>(cvarManager, gameWrapper, exports, std::bind(&TeamTrainingPlugin::OnMessageReceived, this, _1, _2));
+
 	// Usage
 	cvarManager->registerNotifier("team_train_load", 
-		std::bind(&TeamTrainingPlugin::onLoadTrainingPack, this, std::placeholders::_1), 
-		"Launches given team training pack", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
+		std::bind(&TeamTrainingPlugin::onLoadTrainingPack, this, _1), 
+		"Launches given team training pack", PERMISSION_ALL);
 	cvarManager->registerNotifier("team_train_reset", 
-		std::bind(&TeamTrainingPlugin::onResetShot, this, std::placeholders::_1),
-		"Resets the current shot", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
+		std::bind(&TeamTrainingPlugin::onResetShot, this, _1),
+		"Resets the current shot", PERMISSION_ALL);
 	cvarManager->registerNotifier("team_train_next", 
-		std::bind(&TeamTrainingPlugin::onNextShot, this, std::placeholders::_1),
-		"Loads the next shot in the pack", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
+		std::bind(&TeamTrainingPlugin::onNextShot, this, _1),
+		"Loads the next shot in the pack", PERMISSION_ALL);
 	cvarManager->registerNotifier("team_train_prev", 
-		std::bind(&TeamTrainingPlugin::onPrevShot, this, std::placeholders::_1),
-		"Loads the previous shot in the pack", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
+		std::bind(&TeamTrainingPlugin::onPrevShot, this, _1),
+		"Loads the previous shot in the pack", PERMISSION_ALL);
 	cvarManager->registerNotifier("team_train_list", 
-		std::bind(&TeamTrainingPlugin::listPacks, this, std::placeholders::_1),
+		std::bind(&TeamTrainingPlugin::listPacks, this, _1),
 		"Lists available packs", PERMISSION_ALL);
+	cvarManager->registerNotifier("team_train_unstuck", [this](std::vector<std::string> params) {
+		if (gameWrapper->IsInFreeplay()) {
+			cvarManager->log("Unfreezing not supported in freeplay");
+			return;
+		}
+		Netcode->SendMessageW("unstuck");
+		}, "Attempts to unfreeze all cars and sends messages to all other clients to unfreeze", PERMISSION_ALL);
 
 	// Role assignment
 	cvarManager->registerNotifier("team_train_randomize_players",
-		std::bind(&TeamTrainingPlugin::randomizePlayers, this, std::placeholders::_1),
-		"Randomizes the assignments of players to roles", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
+		std::bind(&TeamTrainingPlugin::randomizePlayers, this, _1),
+		"Randomizes the assignments of players to roles", PERMISSION_ALL);
 	cvarManager->registerNotifier("team_train_cycle_players",
-		std::bind(&TeamTrainingPlugin::cyclePlayers, this, std::placeholders::_1),
-		"Cycles the assignments of players to roles", PERMISSION_FREEPLAY | PERMISSION_PAUSEMENU_CLOSED);
+		std::bind(&TeamTrainingPlugin::cyclePlayers, this, _1),
+		"Cycles the assignments of players to roles", PERMISSION_ALL);
 	
 	// Variables
 	cvarManager->registerCvar(CVAR_PREFIX + "countdown", "1", "Time to wait until shot begins", true, true, 0, true, 10, true);
+	cvarManager->registerCvar(CVAR_PREFIX + "netcode_enabled", "0", "Enables netcode to communicate countdown on drill resets", true, false, 0, false, 0, true);
 	cvarManager->registerCvar(CVAR_PREFIX + "last_version_loaded", "", "The last version of the plugin that was loaded, used for displaying changelog first when plugin is updated.",
 		false, false, 0, 0, 0, true);
 
 	gameWrapper->LoadToastTexture("teamtraining1", gameWrapper->GetDataFolder() / "assets" / "teamtraining_logo.png");
 
+	cvarManager->registerNotifier("team_train_rand_pack",
+		std::bind(&TeamTrainingPlugin::loadRandomPack, this, _1), "Loads a random training pack", PERMISSION_ALL);
+
 	auto pname = gameWrapper->GetPlayerName();
 	if (!pname.IsNull()) uploader = pname.ToString();
 	uploaderID = UIDToString(gameWrapper->GetUniqueID());
 
-	gameWrapper->HookEventPost(CUSTOM_TRAINING_LOADED_EVENT, bind(&TeamTrainingPlugin::onCustomTrainingLoaded, this, placeholders::_1));
+	gameWrapper->HookEventPost(CUSTOM_TRAINING_LOADED_EVENT, bind(&TeamTrainingPlugin::onCustomTrainingLoaded, this, _1));
 
 	/*gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
 		"Function TAGame.GameEvent_TA.AddCar",
-		std::bind(&TeamTrainingPlugin::onPlayerLeave, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+		std::bind(&TeamTrainingPlugin::onPlayerLeave, this, _1, _2, _3));
 	gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
 		"Function TAGame.GameEvent_TA.RemoveCar",
-		std::bind(&TeamTrainingPlugin::onPlayerJoin, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));*/
+		std::bind(&TeamTrainingPlugin::onPlayerJoin, this, _1, _2, _3));*/
 
 	//cvarManager->registerNotifier("team_train_test", std::bind(&TeamTrainingPlugin::test, this, std::placeholders::_1), "test", PERMISSION_ALL);
 }
@@ -129,16 +144,106 @@ void TeamTrainingPlugin::onUnload()
 	}
 }
 
-void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
+void TeamTrainingPlugin::OnMessageReceived(const string& Message, PriWrapper Sender)
 {
-	cvarManager->log("Team training now has a UI. F2 -> Plugins -> Team Training Plugin and click the button :)");
-
-	if (!gameWrapper->IsInFreeplay()) {
+	if (!isValidServer()) {
+		cvarManager->log("Received messsage while not in valid session");
 		return;
 	}
+
+	if (gameWrapper->IsInFreeplay()) {
+		cvarManager->log("Message received in freeplay. Netcode not supported in freeplay.");
+		return;
+	}
+
+	vector<string> fields;
+	boost::split(fields, Message, boost::is_any_of("|"));
+
+	chrono::milliseconds reset_time = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
+	last_reset = reset_time;
+
+	if (fields[0].compare("unstuck") == 0)
+	{
+		auto server = gameWrapper->GetGameEventAsServer();
+		if (server.IsNull()) {
+			cvarManager->log("Server null during unstuck, will attempt to unstuck local car");
+			auto car = gameWrapper->GetLocalCar();
+			if (car.IsNull()) {
+				cvarManager->log("Local car is null too during unstuck. This isn't good...");
+				return;
+			}
+			car.SetFrozen(0);
+		}
+		else {
+			auto cars = server.GetCars();
+			for (auto car : cars) {
+				if (car.IsNull()) continue;
+				car.SetFrozen(0);
+			}
+		}
+	}
+	else if (fields[0].compare("reset") == 0)
+	{
+		if (fields.size() <= 1) cvarManager->log("Not enough args for reset: " + to_string(fields.size()));
+		float timer = (float) ::atof(fields[1].c_str());
+
+		auto server = gameWrapper->GetGameEventAsServer();
+		if (server.IsNull()) {
+			cvarManager->log("Server is null. Will try to operate on local car.");
+
+			auto car = gameWrapper->GetLocalCar();
+			if (car.IsNull()) {
+				cvarManager->log("Local car is null too.");
+				return;
+			}
+
+			car.SetFrozen(1);
+			gameWrapper->SetTimeout([this, reset_time](GameWrapper* gw) {
+				if (reset_time != last_reset) return;
+
+				auto car = gameWrapper->GetLocalCar();
+				if (car.IsNull()) {
+					cvarManager->log("Local car is null during unfreeze timer.");
+					return;
+				}
+				car.SetFrozen(0);
+				}, timer);
+		}
+		else {
+			auto cars = server.GetCars();
+			for (auto car : cars) {
+				if (car.IsNull()) continue;
+				car.SetFrozen(1);
+			}
+
+			gameWrapper->SetTimeout([this, reset_time](GameWrapper* gw) {
+				if (reset_time != last_reset) return;
+
+				auto server = gameWrapper->GetGameEventAsServer();
+				if (server.IsNull()) {
+					cvarManager->log("Server is null but previously wasn't...");
+					auto car = gameWrapper->GetLocalCar();
+					if (car.IsNull()) {
+						cvarManager->log("Car is null, too. Perhaps host left match?");
+						return;
+					}
+					car.SetFrozen(0);
+				}
+
+				auto cars = server.GetCars();
+				for (auto car : cars) {
+					if (car.IsNull()) continue;
+					car.SetFrozen(0);
+				}
+				}, timer);
+		}
+	}
+}
+
+void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
+{
 	ServerWrapper server = gameWrapper->GetGameEventAsServer();
-	if (server.IsNull()) {
-		cvarManager->log("Server is null, cannot load pack");
+	if (!isValidServer(server)) {
 		return;
 	}
 
@@ -199,19 +304,13 @@ void TeamTrainingPlugin::onFreeplayDestroyed(std::string eventName)
 
 void TeamTrainingPlugin::setShot(int shot)
 {
-	if (!gameWrapper->IsInFreeplay()) {
-		cvarManager->log("Not in freeplay");
-		return;
-	}
-	
 	if (!pack) {
 		cvarManager->log("No pack loaded");
 		return;
 	}
 
 	ServerWrapper server = gameWrapper->GetGameEventAsServer();
-	if (server.IsNull()) {
-		cvarManager->log("Server is null, cannot continue to set shot");
+	if (!isValidServer(server)) {
 		return;
 	}
 
@@ -277,6 +376,7 @@ void TeamTrainingPlugin::setShot(int shot)
 			cvarManager->log("Car " + to_string(i-1) + " became null?");
 			return;
 		}
+		car.SetFrozen(0); // Might currently be frozen
 		setPlayerToCar(player, car);
 	}
 
@@ -309,20 +409,28 @@ void TeamTrainingPlugin::setShot(int shot)
 	
 	cvarManager->log("Attaching timer");
 	float countdown = cvarManager->getCvar(CVAR_PREFIX + "countdown").getFloatValue();
-	cvarManager->log("Countdown: " + to_string(countdown));
+
+	if (cvarManager->getCvar(CVAR_PREFIX + "netcode_enabled").getBoolValue()) {
+		// Message received on server seems to happen in same tick, and car location is never set if frozen then, so wait a tick
+		if (gameWrapper->IsInFreeplay()) {
+			cvarManager->log("Freezing on shot reset not supported in freeplay");
+		}
+		else {
+			gameWrapper->SetTimeout([this, countdown](GameWrapper* gw) {
+				Netcode->SendMessage("reset|" + to_string(countdown));
+				}, 0.009f);
+		}
+	}
+
 	auto pack_load_time = this->pack->load_time;
 	gameWrapper->SetTimeout([&, &_cvarManager = cvarManager, shot_set, pack_load_time](GameWrapper *gw) {
-		if (!gameWrapper->IsInFreeplay()) {
-			return;
-		}
-
 		// Don't do anything if a new shot was set or pack was replaced before timeout is called
 		if (!pack || last_shot_set != shot_set || pack_load_time != pack->load_time) {
 			return;
 		}
 
 		ServerWrapper sw = gw->GetGameEventAsServer();
-		if (sw.IsNull()) {
+		if (!isValidServer(sw)) {
 			return;
 		}
 
@@ -445,6 +553,61 @@ void TeamTrainingPlugin::listPacks(std::vector<std::string> params)
 	}
 }
 
+void TeamTrainingPlugin::loadRandomPack(std::vector<std::string> params)
+{
+	if (packs.size() == 0) {
+		packs = getTrainingPacks();
+	}
+
+	unordered_set<string> tags(params.begin() + 1, params.end());
+	vector<TrainingPack> filteredPacks;
+	for (TrainingPack& p : packs) {
+		if (p.offense + p.defense != 1 || p.code.empty()) continue; // Only allow single player packs for now
+
+		if (tags.size() == 0) {
+			filteredPacks.push_back(p);
+		}
+		else {
+			for (const string& tag : p.tags) {
+				if (tags.find(tag) != tags.end()) {
+					filteredPacks.push_back(p);
+					break;
+				}
+			}
+		}
+	}
+
+	if (filteredPacks.size() == 0) {
+		cvarManager->log("Failed to load random training pack. There appear to be no training packs with at least one tag matching: " + boost::join(tags, ", "));
+		return;
+	}
+
+	int r = rand() % filteredPacks.size();
+	cvarManager->executeCommand("sleep 1; load_training " + filteredPacks[r].code);
+}
+
+bool TeamTrainingPlugin::isValidServer()
+{
+	if (gameWrapper->IsInFreeplay()) return true;
+
+	if (gameWrapper->IsInOnlineGame() || gameWrapper->IsInReplay() || !gameWrapper->IsInGame()) {
+		cvarManager->log("Must be host of a freeplay session or LAN match");
+		return false;
+	}
+
+	return true;
+}
+
+bool TeamTrainingPlugin::isValidServer(ServerWrapper& server)
+{
+	if (server.IsNull()) {
+		cvarManager->log("Server is null, cannot continue to set shot");
+		return false;
+	}
+
+	return isValidServer();
+}
+
 void TeamTrainingPlugin::onGoalScored(std::string eventName)
 {
 	goal_was_scored = true;
@@ -468,7 +631,7 @@ void TeamTrainingPlugin::onResetShot(std::vector<std::string> params)
 
 void TeamTrainingPlugin::resetShot()
 {
-	if (!gameWrapper->IsInFreeplay() || !pack) {
+	if (!isValidServer() || !pack) {
 		return;
 	}
 
@@ -477,7 +640,7 @@ void TeamTrainingPlugin::resetShot()
 
 void TeamTrainingPlugin::onNextShot(std::vector<std::string> params)
 {
-	if (!gameWrapper->IsInFreeplay() || !pack) {
+	if (!isValidServer() || !pack) {
 		return;
 	}
 
@@ -491,7 +654,7 @@ void TeamTrainingPlugin::onNextShot(std::vector<std::string> params)
 
 void TeamTrainingPlugin::onPrevShot(std::vector<std::string> params)
 {
-	if (!gameWrapper->IsInFreeplay() || !pack) {
+	if (!isValidServer() || !pack) {
 		return;
 	}
 
@@ -688,9 +851,9 @@ void TeamTrainingPlugin::onCustomTrainingLoaded(string event)
 		}
 
 		auto td = te.GetTrainingData();
-		if (td.GetbUnowned() != 1) {
+		/*if (td.GetbUnowned() != 1) {
 			return;
-		}
+		}*/
 
 		auto tdd = td.GetTrainingData();
 
@@ -710,12 +873,6 @@ void TeamTrainingPlugin::onCustomTrainingLoaded(string event)
 
 		inGameTrainingPackData.failed = false;
 		}, 1.0f);
-}
-
-static inline bool dir_exists(const char *dirpath)
-{
-	DWORD ftyp = GetFileAttributes(dirpath);
-	return (ftyp != INVALID_FILE_ATTRIBUTES && ftyp & FILE_ATTRIBUTE_DIRECTORY);
 }
 
 std::vector<TrainingPack> TeamTrainingPlugin::getTrainingPacks() {

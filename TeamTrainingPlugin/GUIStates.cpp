@@ -1,5 +1,7 @@
 #include "GUIStates.h"
 
+using namespace std;
+
 // Prepares tag state for being refreshed with tags and marks it as being refreshed
 void TagsState::refresh() {
 	oldTags.clear();
@@ -112,7 +114,7 @@ vector<string> TagsState::GetEnabledTags() const {
 }
 
 map<OnlinePlatform, string> PLATFORM_TO_STRING = {
-	{ OnlinePlatform_Unknown, "Unkown" },
+	{ OnlinePlatform_Unknown, "Unknown" },
 	{ OnlinePlatform_Steam, "Steam" },
 	{ OnlinePlatform_PS4, "PS4" },
 	{ OnlinePlatform_PS3, "PS3" },
@@ -126,9 +128,11 @@ map<OnlinePlatform, string> PLATFORM_TO_STRING = {
 	{ OnlinePlatform_Epic, "Epic" }
 };
 
-string UIDToString(UniqueIDWrapper uid)
+string UIDToString(UniqueIDWrapper uidw)
 {
-	return PLATFORM_TO_STRING[uid.GetPlatform()] + ":" + to_string(uid.GetUID());
+	auto uidL = uidw.GetUID();
+	string uid = (uidL == 0 ? uidw.GetEpicAccountID() : to_string(uidL));
+	return PLATFORM_TO_STRING[uidw.GetPlatform()] + ":" + uid;
 }
 
 void to_json(json& j, const SearchFilterState& s)

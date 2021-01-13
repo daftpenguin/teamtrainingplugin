@@ -1,37 +1,38 @@
 // TODO: Fix my fucking coding style... camelCase or underscores. capitalize methods or don't. ffs pick one holy shit
 #pragma once
+#pragma comment(lib, "libssl.lib")
+#pragma comment(lib, "libcrypto.lib")
+#pragma comment(lib, "CRYPT32.lib")
+#pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "pluginsdk.lib")
-#pragma comment(lib, "crypt32.lib")
-#pragma comment(lib, "ws2_32.lib")
 
-#define WIN32_LEAN_AND_MEAN
 #define CPPHTTPLIB_OPENSSL_SUPPORT
+#define WIN32_LEAN_AND_MEAN
+#include "cpp-httplib/httplib.h"
 
 #include "bakkesmod/plugin/bakkesmodplugin.h"
 #include "bakkesmod/plugin/pluginwindow.h"
 #include "imgui/imgui.h"
 #include "TrainingPack.h"
-#include "cpp-httplib/httplib.h"
 #include "GUIStates.h"
+#include "NetcodeManager/NetcodeManager.h"
 
 #include <fstream>
 #include <filesystem>
+#include <chrono>
 
-using namespace std;
-namespace fs = std::filesystem;
 
-constexpr auto PLUGIN_VERSION = "0.3.1";
-constexpr auto SERVER_URL = "https://www.daftpenguin.com"; // TODO: Make this a cvar?
+constexpr auto PLUGIN_VERSION = "0.3.2";
+constexpr auto SERVER_URL = "https://www.daftpenguin.com";
+//constexpr auto SERVER_URL = "http://localhost:8000";
 constexpr int MAX_BALL_TICK_FAILURES = 3;
 constexpr int MAX_BALL_VELOCITY_ZERO = 5;
-
 constexpr int NUM_TAG_COLUMNS = 5;
-
 constexpr int MAX_SECONDS_SINCE_TEM_FILE_CREATED = 15;
-
 constexpr auto CUSTOM_TRAINING_LOADED_EVENT = "Function TAGame.GameEvent_TrainingEditor_TA.StartPlayTest";
 
-const string CVAR_PREFIX("cl_team_training_");
+
+const std::string CVAR_PREFIX("cl_team_training_");
 
 class TeamTrainingPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginWindow
 {
@@ -40,6 +41,9 @@ public:
 	void onUnload();
 
 private:
+	std::shared_ptr<NetcodeManager> Netcode;
+	void OnMessageReceived(const std::string& Message, PriWrapper Sender);
+
 	/*
 	 * Training Pack Usage
 	 */
@@ -51,6 +55,9 @@ private:
 	void cyclePlayers(std::vector<std::string> params);
 	void listPacks(std::vector<std::string> params);
 	//void test(std::vector<std::string> params);
+	void loadRandomPack(std::vector<std::string> params);
+	bool isValidServer();
+	bool isValidServer(ServerWrapper& sw);
 
 	// Player tracking
 	//void onPlayerLeave(PlayerControllerWrapper pc, void* params, string eventName);
@@ -78,6 +85,8 @@ private:
 	unsigned int current_shot = 0;
 	unsigned int last_shot_set = 0;
 	bool goal_was_scored = false;
+	bool netcodeEnabled = false;
+	std::chrono::milliseconds last_reset;
 
 /*
  * Training Pack Conversion
@@ -110,13 +119,13 @@ private:
 		{ "Creation", {}},
 	};
 	std::string packDataPath = "";
-	string uploader;
-	string uploaderID;
+	std::string uploader;
+	std::string uploaderID;
 	// Selection
 	char addByCode[20] = "";
 	char customTag[128] = "";
 	TrainingPack tagEditingPack;
-	int selectedPackIdx = 0;
+	size_t selectedPackIdx = 0;
 	std::vector<TrainingPack> packs;
 	std::vector<TrainingPack> filteredPacks;
 	// Downloads
@@ -134,7 +143,7 @@ private:
 	char description[MAX_DESCRIPTION_LENGTH] = "";
 	char creatorNotes[MAX_NOTES_LENGTH] = "";
 	char youtubeLink[MAX_YOUTUBE_LENGTH] = "";
-	vector<string> enabledTags;
+	std::vector<std::string> enabledTags;
 	// Settings
 	char countdown[10] = "1.0";
 
@@ -153,7 +162,7 @@ private:
 	static constexpr char RESET_CFG_FILE[] = "default_training.cfg";
 
 	void AddSearchFilters(
-		SearchFilterState& filterState, string idPrefix, bool alwaysShowSearchButton,
+		SearchFilterState& filterState, std::string idPrefix, bool alwaysShowSearchButton,
 		std::function<void(TagsState& tagsState)> tagLoader,
 		std::function<void(SearchFilterState& filters)> searchCallback);
 	void filterLocalPacks(SearchFilterState& filters);
@@ -180,13 +189,13 @@ private:
 	void UploadFavoritedPacks();
 	void FavoritedPacksUploadThread();
 
-	void AddPackByCode(string code);
+	void AddPackByCode(std::string code);
 	void addPackByCodeThread(bool isRetry);
 	void ShowAddByCodeModal();
 
 	void addPackByTemFNameThread();
 
-	void onCustomTrainingLoaded(string event);
+	void onCustomTrainingLoaded(std::string event);
 
 	TagsState localEditTagsState;
 	SearchState localFilterState;

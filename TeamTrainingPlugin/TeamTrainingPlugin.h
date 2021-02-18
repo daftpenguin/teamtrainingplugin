@@ -15,7 +15,7 @@
 #include "imgui/imgui.h"
 #include "TrainingPack.h"
 #include "GUIStates.h"
-#include "NetcodeManager/NetcodeManager.h"
+//#include "NetcodeManager/NetcodeManager.h"
 
 #include <fstream>
 #include <filesystem>
@@ -41,8 +41,8 @@ public:
 	void onUnload();
 
 private:
-	std::shared_ptr<NetcodeManager> Netcode;
-	void OnMessageReceived(const std::string& Message, PriWrapper Sender);
+	//std::shared_ptr<NetcodeManager> Netcode;
+	//void OnMessageReceived(const std::string& Message, PriWrapper Sender);
 
 	/*
 	 * Training Pack Usage
@@ -85,7 +85,7 @@ private:
 	unsigned int current_shot = 0;
 	unsigned int last_shot_set = 0;
 	bool goal_was_scored = false;
-	bool netcodeEnabled = false;
+	//bool netcodeEnabled = false;
 	std::chrono::milliseconds last_reset;
 
 /*

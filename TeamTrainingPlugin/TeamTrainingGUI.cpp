@@ -14,14 +14,9 @@
 
 // WARNING: It gets really ugly below...
 
-// TODO: Prevent users from uploading too frequently (in server code, not here) - by IP, by steamID...
 // TODO: Add commenting and ratings
-// TODO: Add tips/notes from multiple users
-// TODO: Allow reporting of packs, comments, tips, etc
-// TODO: Specify 0 = none. Search on description. Search on creator.
+// TODO: Specify 0 = none.
 // TODO: Sorting methods.
-// TODO: How to determine which packs were downloaded vs created? How to determine which packs can be uploaded?
-// TODO: Notes and other data should be updateable by both creator and uploader?
 
 namespace fs = std::filesystem;
 using namespace std;
@@ -176,20 +171,20 @@ void TeamTrainingPlugin::Render()
 						if (ImGui::Button("Load Team Training Pack")) {
 							errorMsgs["Selection"].clear();
 
-							if (!isValidServer()) {
+							auto server = gameWrapper->GetGameEventAsServer();
+							if (!isValidServer(server)) {
 								errorMsgs["Selection"].push_back("You must be the host in a freeplay session or LAN match to load a training pack. Use Rocket plugin to launch a multiplayer session with non-local players.");
 							}
 							else {
-								auto cars = gameWrapper->GetGameEventAsServer().GetCars();
+								auto cars = server.GetCars();
 								if (cars.Count() < pack.offense) {
 									errorMsgs["Selection"].push_back("Pack requires " + std::to_string(pack.offense) + " players but there are only " + std::to_string(cars.Count()) + " in the lobby.");
 								}
 							}
 
 							if (errorMsgs["Selection"].size() == 0) {
-								cvarManager->executeCommand("sleep 1; team_train_load " + pack.code);
+								cvarManager->executeCommand("sleep 1; team_train_load " + pack.filepath.filename().string());
 							}
-
 						}
 					}
 
@@ -343,7 +338,8 @@ void TeamTrainingPlugin::Render()
 				ImGui::Text("Defensive Players: %d", pack.defense);
 				ImGui::Text("Drills: %d", pack.num_drills);
 				ImGui::Text("Code: %s", pack.code.c_str());
-				ImGui::Text("Tags: %s", boost::algorithm::join(pack.tags, ", ").c_str());
+				ImGui::TextWrapped("Tags: %s", boost::algorithm::join(pack.tags, ", ").c_str());
+				ImGui::Text("Downloads: %d", pack.downloads);
 
 				ImGui::EndChild();
 
@@ -565,7 +561,7 @@ void TeamTrainingPlugin::Render()
 			ImGui::TextWrapped("This plugin now utilizes the automatic shuffling and shot variance settings set in BakkesMod's Custom Training settings (F2 -> Custom Training tab).");
 			ImGui::Separator();
 			ImGui::InputText("Countdown after reset (in seconds)", countdown, IM_ARRAYSIZE(countdown), ImGuiInputTextFlags_CharsScientific);
-			ImGui::Checkbox("Freeze players during countdown", &netcodeEnabled);
+			//ImGui::Checkbox("Freeze players during countdown", &netcodeEnabled);
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
 			ImGui::TextWrapped("This feature requires ALL players in the lobby to have the latest version of the Team Training plugin installed and running. For easy install/update, open the plugin manager UI through plugins section of F2 menu, and install by ID 99.");
 			ImGui::TextWrapped("Consider this feature as experimental as I have not yet determined all unusual events that may occur.");
@@ -578,7 +574,7 @@ void TeamTrainingPlugin::Render()
 
 			if (ImGui::Button("Save")) {
 				cvarManager->getCvar(CVAR_PREFIX + "countdown").setValue(countdown);
-				cvarManager->getCvar(CVAR_PREFIX + "netcode_enabled").setValue(netcodeEnabled);
+				//cvarManager->getCvar(CVAR_PREFIX + "netcode_enabled").setValue(netcodeEnabled);
 			}
 
 			ImGui::Separator();
@@ -607,6 +603,8 @@ void TeamTrainingPlugin::Render()
 			ImGui::BulletText("Fixed crash on null tags");
 			ImGui::BulletText("Added handling of invalid pack IDs returned when adding favorited packs");
 			ImGui::BulletText("Added workaround for when Epic UID returns as 0");
+			ImGui::BulletText("Fixed bug where only packs with filenames the same as the training pack codes could be loaded");
+			ImGui::BulletText("Resolved an issue that would have prevented future plugin updates from being automatically downloaded");
 
 			ImGui::TextWrapped("v0.3.1 (Jan 3 2021)");
 			ImGui::TextWrapped("Changelog:");
@@ -619,18 +617,6 @@ void TeamTrainingPlugin::Render()
 			ImGui::BulletText("Added support for custom training metadata for organizingand downloading custom training packs");
 			ImGui::BulletText("Added button to add custom training packs via codeand add all favorited packs");
 			ImGui::BulletText("Fixed issue with non-ascii characters not showing in UI");
-
-			ImGui::Separator();
-
-			ImGui::TextWrapped("v0.2.8 (Dec 7 2020)");
-			ImGui::TextWrapped("Changelog:");
-			ImGui::BulletText("Updated to work with upcoming Epic Games support");
-
-			ImGui::Separator();
-
-			ImGui::TextWrapped("v0.2.7 (Sep 4 2020)");
-			ImGui::TextWrapped("Changelog:");
-			ImGui::BulletText("Fixed bug causing crashes when variance is enabled");
 
 			ImGui::Separator();
 
@@ -1444,9 +1430,9 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 					TrainingPack pack(outpath);
 					pack.addTag("Favorite");
 					pack.save();
-					packs.clear();
 				}
 				else {
+					packs.clear();
 					state.failed = true;
 					state.error = dataSS.str();
 					cvarManager->log(state.error);
@@ -1454,6 +1440,7 @@ void TeamTrainingPlugin::FavoritedPacksUploadThread()
 				}
 			}
 			else {
+				packs.clear();
 				state.failed = true;
 				state.error = "Download failed. Could not reach server";
 				cvarManager->log(state.error);

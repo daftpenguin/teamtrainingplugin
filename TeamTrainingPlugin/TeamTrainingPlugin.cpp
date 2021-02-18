@@ -53,7 +53,7 @@ std::string vectorToString(std::vector<int> v) {
 void TeamTrainingPlugin::onLoad()
 {
 	using namespace std::placeholders;
-	Netcode = std::make_shared<NetcodeManager>(cvarManager, gameWrapper, exports, std::bind(&TeamTrainingPlugin::OnMessageReceived, this, _1, _2));
+	//Netcode = std::make_shared<NetcodeManager>(cvarManager, gameWrapper, exports, std::bind(&TeamTrainingPlugin::OnMessageReceived, this, _1, _2));
 
 	// Usage
 	cvarManager->registerNotifier("team_train_load", 
@@ -71,13 +71,14 @@ void TeamTrainingPlugin::onLoad()
 	cvarManager->registerNotifier("team_train_list", 
 		std::bind(&TeamTrainingPlugin::listPacks, this, _1),
 		"Lists available packs", PERMISSION_ALL);
-	cvarManager->registerNotifier("team_train_unstuck", [this](std::vector<std::string> params) {
+	/*cvarManager->registerNotifier("team_train_unstuck", [this](std::vector<std::string> params) {
 		if (gameWrapper->IsInFreeplay()) {
 			cvarManager->log("Unfreezing not supported in freeplay");
 			return;
 		}
 		Netcode->SendMessageW("unstuck");
 		}, "Attempts to unfreeze all cars and sends messages to all other clients to unfreeze", PERMISSION_ALL);
+	*/
 
 	// Role assignment
 	cvarManager->registerNotifier("team_train_randomize_players",
@@ -89,7 +90,7 @@ void TeamTrainingPlugin::onLoad()
 	
 	// Variables
 	cvarManager->registerCvar(CVAR_PREFIX + "countdown", "1", "Time to wait until shot begins", true, true, 0, true, 10, true);
-	cvarManager->registerCvar(CVAR_PREFIX + "netcode_enabled", "0", "Enables netcode to communicate countdown on drill resets", true, false, 0, false, 0, true);
+	//cvarManager->registerCvar(CVAR_PREFIX + "netcode_enabled", "0", "Enables netcode to communicate countdown on drill resets", true, false, 0, false, 0, true);
 	cvarManager->registerCvar(CVAR_PREFIX + "last_version_loaded", "", "The last version of the plugin that was loaded, used for displaying changelog first when plugin is updated.",
 		false, false, 0, 0, 0, true);
 
@@ -144,7 +145,7 @@ void TeamTrainingPlugin::onUnload()
 	}
 }
 
-void TeamTrainingPlugin::OnMessageReceived(const string& Message, PriWrapper Sender)
+/*void TeamTrainingPlugin::OnMessageReceived(const string& Message, PriWrapper Sender)
 {
 	if (!isValidServer()) {
 		cvarManager->log("Received messsage while not in valid session");
@@ -189,7 +190,12 @@ void TeamTrainingPlugin::OnMessageReceived(const string& Message, PriWrapper Sen
 
 		auto server = gameWrapper->GetGameEventAsServer();
 		if (server.IsNull()) {
-			cvarManager->log("Server is null. Will try to operate on local car.");
+			cvarManager->log("Server is null.");
+
+			auto server = gameWrapper->GetGameEventAsReplay();
+			if (server.IsNull()) {
+				cvarManager->log("Replay is null too");
+			}
 
 			auto car = gameWrapper->GetLocalCar();
 			if (car.IsNull()) {
@@ -238,7 +244,7 @@ void TeamTrainingPlugin::OnMessageReceived(const string& Message, PriWrapper Sen
 				}, timer);
 		}
 	}
-}
+}*/
 
 void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 {
@@ -410,7 +416,7 @@ void TeamTrainingPlugin::setShot(int shot)
 	cvarManager->log("Attaching timer");
 	float countdown = cvarManager->getCvar(CVAR_PREFIX + "countdown").getFloatValue();
 
-	if (cvarManager->getCvar(CVAR_PREFIX + "netcode_enabled").getBoolValue()) {
+	/*if (cvarManager->getCvar(CVAR_PREFIX + "netcode_enabled").getBoolValue()) {
 		// Message received on server seems to happen in same tick, and car location is never set if frozen then, so wait a tick
 		if (gameWrapper->IsInFreeplay()) {
 			cvarManager->log("Freezing on shot reset not supported in freeplay");
@@ -420,7 +426,7 @@ void TeamTrainingPlugin::setShot(int shot)
 				Netcode->SendMessage("reset|" + to_string(countdown));
 				}, 0.009f);
 		}
-	}
+	}*/
 
 	auto pack_load_time = this->pack->load_time;
 	gameWrapper->SetTimeout([&, &_cvarManager = cvarManager, shot_set, pack_load_time](GameWrapper *gw) {
@@ -590,10 +596,10 @@ bool TeamTrainingPlugin::isValidServer()
 {
 	if (gameWrapper->IsInFreeplay()) return true;
 
-	if (gameWrapper->IsInOnlineGame() || gameWrapper->IsInReplay() || !gameWrapper->IsInGame()) {
+	/*if (gameWrapper->IsInOnlineGame() || gameWrapper->IsInReplay() || !gameWrapper->IsInGame()) {
 		cvarManager->log("Must be host of a freeplay session or LAN match");
 		return false;
-	}
+	}*/
 
 	return true;
 }

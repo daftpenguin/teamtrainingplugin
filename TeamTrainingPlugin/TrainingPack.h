@@ -74,6 +74,8 @@ struct TrainingPackDrill {
 	std::vector<TrainingPackPlayer> passers;
 	TrainingPackPlayer shooter;
 	std::vector<TrainingPackPlayer> defenders;
+
+	void mirror();
 };
 
 class TrainingPack

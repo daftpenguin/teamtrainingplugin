@@ -393,3 +393,56 @@ void to_json(json& j, const Rotator& r)
 {
 	j = json{ {"pitch", r.Pitch}, {"yaw", r.Yaw}, {"roll", r.Roll} };
 }
+
+Vector mirrorVector(Vector v)
+{
+	v.X = -v.X;
+	return v;
+}
+
+Rotator mirrorRotator(Rotator r)
+{
+	// https://github.com/bakkesmodorg/BakkesMod2-Plugins/blob/45d86ebb621addf6b9f0e10b2a8df0a0dcfb8f84/TrainingPlugin/TrainingPlugin.cpp#L72
+	if (r.Yaw > 0) {
+		if (r.Yaw > 16383) {
+			r.Yaw = 16383 - (r.Yaw - 16383);
+		}
+		else {
+			r.Yaw = 16383 + (16383 - r.Yaw);
+
+		}
+	}
+	else {
+		if (r.Yaw > -16383) {
+			r.Yaw = -16383 - (16383 - abs(r.Yaw));
+		}
+		else {
+			r.Yaw = -16383 + (abs(r.Yaw) - 16383);
+		}
+	}
+	return r;
+}
+
+void TrainingPackDrill::mirror()
+{
+	ball.angular = mirrorVector(ball.angular);
+	ball.location = mirrorVector(ball.location);
+	ball.velocity = mirrorVector(ball.velocity);
+	ball.rotation = mirrorRotator(ball.rotation);
+
+	for (auto& passer : passers) {
+		passer.location = mirrorVector(passer.location);
+		passer.velocity = mirrorVector(passer.velocity);
+		passer.rotation = mirrorRotator(passer.rotation);
+	}
+
+	shooter.location = mirrorVector(shooter.location);
+	shooter.velocity = mirrorVector(shooter.velocity);
+	shooter.rotation = mirrorRotator(shooter.rotation);
+	
+	for (auto& defender : defenders) {
+		defender.location = mirrorVector(defender.location);
+		defender.velocity = mirrorVector(defender.velocity);
+		defender.rotation = mirrorRotator(defender.rotation);
+	}
+}

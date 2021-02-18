@@ -55,6 +55,17 @@ void TeamTrainingPlugin::onLoad()
 	using namespace std::placeholders;
 	//Netcode = std::make_shared<NetcodeManager>(cvarManager, gameWrapper, exports, std::bind(&TeamTrainingPlugin::OnMessageReceived, this, _1, _2));
 
+	// Remove TeamTrainingPlugin.dll if it exists (we had to blacklist TeamTraining.dll because prebuilt openssl dll wasn't unloading)
+	auto oldDllPath = gameWrapper->GetBakkesModPath() / "plugins" / "TeamTrainingPlugin.dll";
+	if (fs::exists(oldDllPath)) {
+		if (fs::remove(oldDllPath)) {
+			cvarManager->log("Old dll successfully removed");
+		}
+		else {
+			cvarManager->log("Old dll exists but deletion failed");
+		}
+	}
+
 	// Usage
 	cvarManager->registerNotifier("team_train_load", 
 		std::bind(&TeamTrainingPlugin::onLoadTrainingPack, this, _1), 
@@ -472,6 +483,10 @@ TrainingPackDrill TeamTrainingPlugin::createDrillVariant(TrainingPackDrill drill
 
 	for (int p = 0; p < drill.defenders.size(); p++) {
 		new_drill.defenders.push_back(addCarVariance(drill.defenders[p]));
+	}
+
+	if (cvarManager->getCvar("sv_training_allowmirror").getBoolValue() && dist(gen) * 1 > 0.5) {
+		new_drill.mirror();
 	}
 
 	return new_drill;

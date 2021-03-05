@@ -42,6 +42,17 @@ If you would like to test your team training pack without having to get teammate
 
 # Changelog
 
+v0.3.2
+* Fixed crash on null tags
+* Added handling of invalid pack IDs returned when adding favorited packs
+* Added workaround for when Epic UID returns as 0
+* Fixed bug where only packs with filenames the same as the training pack codes could be loaded
+* Resolved an issue that would have prevented future plugin updates from being automatically downloaded
+* Added support for automatic shot mirroring and fixed ball spin and drill variance
+
+v0.3.1
+* Fixed bug preventing plugin from being loaded
+
 v0.3.0
 * Added the ability to search, download, and share any team training and custom training packs
 * Added support for tags to organize training packs

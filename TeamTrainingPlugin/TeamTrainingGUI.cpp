@@ -603,7 +603,7 @@ void TeamTrainingPlugin::Render()
 			ImGui::BulletText("Added workaround for when Epic UID returns as 0");
 			ImGui::BulletText("Fixed bug where only packs with filenames the same as the training pack codes could be loaded");
 			ImGui::BulletText("Resolved an issue that would have prevented future plugin updates from being automatically downloaded");
-			ImGui::BulletText("Added support for automatic shot mirroring");
+			ImGui::BulletText("Added support for automatic shot mirroring and fixed ball spin and drill variance");
 
 			ImGui::TextWrapped("v0.3.1 (Jan 3 2021)");
 			ImGui::TextWrapped("Changelog:");

@@ -363,9 +363,11 @@ void TeamTrainingPlugin::setShot(int shot)
 
 	cvarManager->log("Retrieving shot and generating variant");
 	TrainingPackDrill drill = pack->drills[shot];
+	cvarManager->log("Drill ball before variance: location: " + vectorString(drill.ball.location) + ", spin: " + vectorString(drill.ball.angular));
 	if (cvarManager->getCvar("sv_training_enabled").getBoolValue()) {
 		drill = createDrillVariant(drill);
 	}
+	cvarManager->log("Drill ball after variance: location: " + vectorString(drill.ball.location) + ", spin: " + vectorString(drill.ball.angular));
 
 	// Stop all cars and ball
 	cvarManager->log("Stopping cars and ball");
@@ -440,7 +442,7 @@ void TeamTrainingPlugin::setShot(int shot)
 	}*/
 
 	auto pack_load_time = this->pack->load_time;
-	gameWrapper->SetTimeout([&, &_cvarManager = cvarManager, shot_set, pack_load_time](GameWrapper *gw) {
+	gameWrapper->SetTimeout([&, &_cvarManager = cvarManager, drill, shot_set, pack_load_time](GameWrapper *gw) {
 		// Don't do anything if a new shot was set or pack was replaced before timeout is called
 		if (!pack || last_shot_set != shot_set || pack_load_time != pack->load_time) {
 			return;
@@ -456,7 +458,7 @@ void TeamTrainingPlugin::setShot(int shot)
 			return;
 		}
 
-		TrainingPackDrill drill = pack->drills[current_shot];
+		//TrainingPackDrill drill = pack->drills[current_shot];
 		BallWrapper ball = sw.GetBall();
 		if (ball.IsNull()) {
 			cvarManager->log("ball is null in timeout. Aborting...");
@@ -464,7 +466,10 @@ void TeamTrainingPlugin::setShot(int shot)
 		}
 		ball.SetRotation(drill.ball.rotation);
 		ball.SetVelocity(drill.ball.velocity);
+		cvarManager->log("Applying angular velocity: " + vectorString(drill.ball.angular));
 		ball.SetAngularVelocity(drill.ball.angular, false);
+
+		cvarManager->log("Drill ball when setting velocity: location: " + vectorString(drill.ball.location) + ", spin: " + vectorString(drill.ball.angular));
 
 	}, max(0.0f, countdown));
 }
@@ -529,10 +534,11 @@ sv_training_var_car_rot "0" //Randomly changes the car rotation by this amount (
 	float z = (float) (-1.0 + 2.0 * dist(gen));
 	float longitude = (float) (2.0 * M_PI * dist(gen));
 	float rh = sin(acos(z));
+	float randSpin = cvarManager->getCvar("sv_training_var_spin").getFloatValue();
 	ball.angular = ball.angular + (Vector{
 		rh * cos(longitude),
 		rh * sin(longitude),
-		z } * (cvarManager->getCvar("sv_training_var_spin").getFloatValue()));
+		z } * randSpin);
 	cvarManager->log("Spin added: " + vectorString(ball.angular));
 
 	return ball;

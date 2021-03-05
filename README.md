@@ -1,3 +1,5 @@
+![Training Pack Screenshot](/images/team-training-banner.png)
+
 A Bakkesmod plugin for multiplayer custom training drills and improved custom training organization and discovery.
 
 # Usage
@@ -22,15 +24,21 @@ To make it easier to leverage the tagging and search features on local training 
 
 # Creating Team Training Packs
 
-Team training packs can be created using regular custom training packs. The way this works is by setting each player's position in separate drills within the custom training pack, and the starting ball's state is taken from the first passer.
+Team training packs can be created using regular custom training packs. The way this works is by setting each player's position in separate shots within the custom training pack. Here's an example of my JZR Freestyle Friday 107 pack:
 
-Entering the the number of offensive and defensive players in the Creation tab will show the drill order. For example, set offensive players to 3 and defensive players to 1. The drill order shows that the first drill should be the shooter's position, the second drill will be the second passer position (passes to shooter from first passer's pass), the third drill will be the first passer position AND the ball's starting position and trajectory in the team training drill, and the fourth drill will be the defender's position. These 4 drills will make up one team training drill. Repeat this pattern in the same custom training pack to have more than one team training drill.
+![Training Pack Screenshot](/images/training-pack-example.png)
 
-Once you have prepared your custom training pack, open the custom training pack to the first drill, open the Team Training plugin's UI, fill in the correct details, and press the convert button. The plugin should close the UI and automatically skip through the drills while retrieving the data necessary for the team training pack (don't press anything while this is happening). Once it's done recording the data, it will stop skipping through the drills and a toast notification will display saying it's completed (if you have toast notifications enabled). If you bring up the plugin's UI, your pack should now show in the pack selection tab.
+Entering the the number of offensive and defensive players in the Creation tab will show the drill order. In this example, the order is shooter then passer. The offensive player ordering makes the assumption that the offensive players will make a sequence of passes from one player to the next, and the last player will take the shot. Packs don't need to necessarily be designed exactly this way, but the last passer in the shot pattern is the shot where the ball's starting position and trajectory will be recorded from. To create a 3 offensive player training pack, the order would be shooter, passer, passer, and the ball will be recorded from shot #3 instead of shot #2. For packs including defensive players, the defensive player positions will follow the last passer, for as many defensive players as needed. Repeat the pattern to create more than 1 team training drill.
+
+Once you have prepared your custom training pack, open your custom training pack to the first drill, open the Team Training plugin's UI, fill in the correct details, and press the convert button. The plugin should close the UI and automatically skip through the drills while retrieving the data necessary for the team training pack (don't press anything while this is happening). Once it's done recording the data, it will stop skipping through the drills and a toast notification will display saying it's completed (if you have toast notifications enabled). If you bring up the plugin's UI, your pack should now show in the pack selection tab.
 
 Defense only training packs do not work right now. These may or may not be supported in a future update.
 
 Note: In future updates, I would also like to be able to show targets and/or ghost balls to give an idea on how some drills might be executed. With this said, I encourage anyone who is making a custom training pack for the purposes of converting it to also appropriately setup the ball in each drill, similar to Wayprotein's packs mentioned above, even if this data is currently unused. It may be necessary for these drills to be technically impossible to complete in the custom training pack, in order to work around the awkwardness in conversion like in the Wayprotein packs (ie: shooter positioned before the pass, but ball positioned at some point during the pass's progression). The current version of the training pack conversion will record the codes of the packs in the training pack file, with hopes that later versions can be updated to include every ball position in the pack in order to create more features for the plugin.
+
+## Testing Team Training Packs
+
+If you would like to test your team training pack without having to get teammates and setup a VPN/port-forwarding, you can add bots into a freeplay session using Rocket Plugin. To do this, load freeplay, then open Rocket Plugin. Go to the "In Game Mods" tab, expand the "Game Event Mods" section, expand the "Bots" section, check "Unfair Teams", and then finally set the "Max # bots per team" to the total number of players you need for the training pack minus the number of local players (eg: if 3 players needed in training pack and you're not playing splitscreen, create 2 bots). It may also be helpful to check freeze bots so they don't move. After you have enough bots, open the selection tab in the team training plugin UI, select your training pack, and click load Team Training pack. You should now be able to skip through the drills and view the starting positions of all the players and the ball.
 
 # Changelog
 

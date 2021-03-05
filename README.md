@@ -1,4 +1,4 @@
-![Training Pack Screenshot](/images/team-training-banner.png)
+![Team Training Banner](/images/team-training-banner.png)
 
 A Bakkesmod plugin for multiplayer custom training drills and improved custom training organization and discovery.
 

@@ -115,6 +115,7 @@ void TeamTrainingPlugin::onLoad()
 	uploaderID = UIDToString(gameWrapper->GetUniqueID());
 
 	gameWrapper->HookEventPost(CUSTOM_TRAINING_LOADED_EVENT, bind(&TeamTrainingPlugin::onCustomTrainingLoaded, this, _1));
+	gameWrapper->HookEventPost(REPLAY_LOADED_EVENT, bind(&TeamTrainingPlugin::onReplayLoaded, this, _1));
 
 	/*gameWrapper->HookEventWithCallerPost<PlayerControllerWrapper>(
 		"Function TAGame.GameEvent_TA.AddCar",
@@ -902,6 +903,14 @@ void TeamTrainingPlugin::onCustomTrainingLoaded(string event)
 		}, 1.0f);
 }
 
+void TeamTrainingPlugin::onReplayLoaded(string event)
+{
+	cvarManager->log("onReplayLoaded called");
+	gameWrapper->SetTimeout([this](GameWrapper* gw) {
+		replayData.load(gw);
+	}, 1.0f);
+}
+
 std::vector<TrainingPack> TeamTrainingPlugin::getTrainingPacks() {
 	std::vector<TrainingPack> packs;
 
@@ -914,6 +923,18 @@ std::vector<TrainingPack> TeamTrainingPlugin::getTrainingPacks() {
 		if (entry.path().has_extension() && entry.path().extension() == ".json") {
 			packs.push_back(TrainingPack(entry.path().string()));
 		}
+	}
+
+	packsForAppend.clear();
+	for (TrainingPack& pack : packs) {
+		if (pack.drills.size() > 0) {
+			packsForAppend.push_back(&pack);
+		}
+	}
+
+	cachedPackNamesForAppend.clear();
+	for (TrainingPack* pack : packsForAppend) {
+		cachedPackNamesForAppend.push_back(const_cast<char*>(pack->description.c_str()));
 	}
 
 	return packs;
@@ -935,4 +956,62 @@ fs::path TeamTrainingPlugin::getPackDataPath(std::string packName)
 	}
 
 	return (gameWrapper->GetDataFolder() / "teamtraining").make_preferred();
+}
+
+void ReplayData::load(GameWrapper *gw)
+{
+	clear();
+
+	if (!gw->IsInReplay()) {
+		errorMsg = "Not in a replay";
+		return;
+	}
+
+	auto replay = gw->GetGameEventAsReplay();
+	if (replay.IsNull()) {
+		errorMsg = "Replay state is NULL. Cannot proceed.";
+		return;
+	}
+
+	auto cars = replay.GetCars();
+	if (cars.IsNull()) {
+		errorMsg = "Failed to retrieve cars from game. Cannot proceed.";
+		return;
+	}
+
+	for (auto car : cars) {
+		if (car.IsNull()) {
+			clear();
+			errorMsg = "One of the cars is NULL. Cannot proceed.";
+			return;
+		}
+		auto pri = car.GetPRI();
+		if (pri.IsNull()) {
+			clear();
+			errorMsg = "One of the PRIs is NULL. Cannot proceed.";
+			return;
+		}
+		auto uid = pri.GetUniqueIdWrapper().GetIdString();
+		auto pname = pri.GetPlayerName();
+		if (pname.IsNull()) {
+			clear();
+			errorMsg = "One of the player names is NULL. Cannot proceed.";
+			return;
+		}
+		if (car.GetTeamNum2() == 0) {
+			team0.push_back(ReplayPlayerData{ pname.ToString(), uid });
+		} else {
+			team1.push_back(ReplayPlayerData{ pname.ToString(), uid });
+		}
+	}
+	
+	dataSet = true;
+}
+
+void ReplayData::clear()
+{
+	dataSet = false;
+	team0.clear();
+	team1.clear();
+	errorMsg.clear();
 }

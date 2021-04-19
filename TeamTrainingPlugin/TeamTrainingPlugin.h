@@ -22,7 +22,7 @@
 #include <chrono>
 
 
-constexpr auto PLUGIN_VERSION = "0.3.2";
+constexpr auto PLUGIN_VERSION = "0.3.3";
 constexpr auto SERVER_URL = "https://www.daftpenguin.com";
 //constexpr auto SERVER_URL = "http://localhost:8000";
 constexpr int MAX_BALL_TICK_FAILURES = 3;
@@ -30,9 +30,27 @@ constexpr int MAX_BALL_VELOCITY_ZERO = 5;
 constexpr int NUM_TAG_COLUMNS = 5;
 constexpr int MAX_SECONDS_SINCE_TEM_FILE_CREATED = 15;
 constexpr auto CUSTOM_TRAINING_LOADED_EVENT = "Function TAGame.GameEvent_TrainingEditor_TA.StartPlayTest";
+constexpr auto REPLAY_LOADED_EVENT = "Function TAGame.GameInfo_Replay_TA.ImportReplay";
 
 
 const std::string CVAR_PREFIX("cl_team_training_");
+
+struct ReplayPlayerData {
+	std::string name;
+	std::string id;
+};
+
+class ReplayData {
+public:
+	ReplayData() : dataSet(false) {};
+	void load(GameWrapper* gw);
+	void clear();
+
+	bool dataSet = false;
+	std::vector<ReplayPlayerData> team0;
+	std::vector<ReplayPlayerData> team1;
+	std::string errorMsg;
+};
 
 class TeamTrainingPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginWindow
 {
@@ -131,7 +149,9 @@ private:
 	// Downloads
 	int downloadSelectedPackIdx = 0;
 	SearchState searchState;
-	// Creation
+	std::vector<TrainingPack*> packsForAppend;
+	std::vector<char*> cachedPackNamesForAppend;
+	// Creation from training pack
 	InGameTrainingPackData inGameTrainingPackData;
 	int offensive_players = 0;
 	int defensive_players = 0;
@@ -144,6 +164,12 @@ private:
 	char creatorNotes[MAX_NOTES_LENGTH] = "";
 	char youtubeLink[MAX_YOUTUBE_LENGTH] = "";
 	std::vector<std::string> enabledTags;
+	// Creation from replay
+	bool appendToExistingPack;
+	int offensiveTeam;
+	int createFromReplaySelectedPackIdx;
+	std::unordered_map<std::string, ReplayPlayerData> unassignedPlayers;
+	ReplayData replayData;
 	// Settings
 	char countdown[10] = "1.0";
 
@@ -196,6 +222,7 @@ private:
 	void addPackByTemFNameThread();
 
 	void onCustomTrainingLoaded(std::string event);
+	void onReplayLoaded(std::string event);
 
 	TagsState localEditTagsState;
 	SearchState localFilterState;

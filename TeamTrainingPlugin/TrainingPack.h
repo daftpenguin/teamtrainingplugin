@@ -47,6 +47,13 @@ struct TrainingPackBall {
 			angular.clone()
 		};
 	}
+
+	void fromBall(BallWrapper ball) {
+		location = ball.GetLocation().clone();
+		velocity = ball.GetVelocity().clone();
+		rotation = Rotator(ball.GetRotation());
+		angular = ball.GetAngularVelocity().clone();
+	}
 };
 
 struct TrainingPackPlayer {
@@ -55,9 +62,12 @@ struct TrainingPackPlayer {
 	Vector velocity;
 	Rotator rotation;
 
-	TrainingPackPlayer() : boost(100) {};
+	TrainingPackPlayer() : boost(100) {}
+	TrainingPackPlayer(CarWrapper car) : boost(100) {
+		fromCar(car);
+	}
 	TrainingPackPlayer(float boost, Vector location, Vector velocity, Rotator rotation)
-		: boost(boost), location(location.clone()), velocity(velocity.clone()), rotation(Rotator(rotation)) {};
+		: boost(boost), location(location.clone()), velocity(velocity.clone()), rotation(Rotator(rotation)) {}
 
 	inline TrainingPackPlayer clone() {
 		return TrainingPackPlayer{
@@ -66,6 +76,16 @@ struct TrainingPackPlayer {
 			velocity.clone(),
 			Rotator{ rotation.Pitch, rotation.Yaw, rotation.Roll }
 		};
+	}
+
+	void fromCar(CarWrapper car) {
+		auto boost_comp = car.GetBoostComponent();
+		if (!boost_comp.IsNull()) {
+			boost = boost_comp.GetCurrentBoostAmount();
+		}
+		location = car.GetLocation().clone();
+		velocity = car.GetVelocity().clone();
+		rotation = Rotator(car.GetRotation());
 	}
 };
 
@@ -114,7 +134,7 @@ public:
 	// Things needed for pack creation, properties should not be imported/exported
 	TrainingPack(std::filesystem::path filepath, int offense, int defense, int numDrills, std::string code,
 		std::string creator, std::string creatorID, std::string description, std::string notes,
-		std::string youtube, std::unordered_set<std::string> tags);
+		std::string youtube, std::unordered_set<std::string>* tags);
 	char* save();
 	void addBallLocation(BallWrapper ball);
 	void setBallMovement(BallWrapper ball);
@@ -123,6 +143,8 @@ public:
 	bool lastPlayerAddedWasFirstPasser();
 	bool allPlayersInDrillAdded();
 	bool expectingMoreDrills();
+
+	void addDrill(TrainingPackDrill &drill);
 
 	bool setTags(std::vector<std::string> tags);
 	void addTag(std::string tag);

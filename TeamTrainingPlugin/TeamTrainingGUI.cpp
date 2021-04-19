@@ -411,21 +411,6 @@ void TeamTrainingPlugin::Render()
 		}
 
 		if (ImGui::BeginTabItem("Creation")) {
-			ImGui::TextWrapped("Team training packs can be generated from the single player custom training packs by separating each player's position into individual drills.");
-			ImGui::TextWrapped("This will NOT work out for any random custom training pack, you must design the pack in a specific way for this to conversion to work.");
-			ImGui::TextWrapped("Enter the number of offensive and defensive players below, and the ordering of each drill to the corresponding player position will show.");
-			ImGui::TextWrapped("Using the custom training pack creator within the game, setup each drill using this pattern.");
-			ImGui::TextWrapped("After creating the custom training pack, load the pack up in game, fill in all of the details below, then click the convert button.");
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
-			ImGui::TextWrapped("Turn off BakkesMod's playlist shuffling, mirroring, and custom training variance before doing conversion.");
-			ImGui::TextWrapped("Number of drills is the total number of drills that will be in the final team training pack.");
-			ImGui::PopStyleColor();
-			ImGui::Separator();
-			ImGui::TextWrapped("For example, convert WayProtein's training pack by loading it with the button below, enter 2 offensive players, 0 defensive players, and 8 drills, then click convert.");
-			if (ImGui::Button("Load WayProtein's Passing (downfield left)")) {
-				cvarManager->executeCommand("sleep 1; load_training C833-6A35-A46A-7191");
-			}
-			ImGui::Separator();
 
 			if (errorMsgs["Creation"].size() > 0) {
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
@@ -436,121 +421,402 @@ void TeamTrainingPlugin::Render()
 				ImGui::Separator();
 			}
 
-			if (gameWrapper->IsInCustomTraining()) {
-				if (!inGameTrainingPackData.failed && ::strcmp(inGameTrainingPackData.code, code) != 0) {
-					::strncpy(filename, inGameTrainingPackData.code, sizeof(code));
-					::strncpy(code, inGameTrainingPackData.code, sizeof(code));
-					::strncpy(creatorID, inGameTrainingPackData.creatorID, sizeof(creatorID));
-					gui_num_drills = inGameTrainingPackData.numDrills;
-					offensive_players = 1;
-					defensive_players = 0;
-					enabledTags.clear();
+			if (ImGui::BeginTabBar("Creation Options", ImGuiTabBarFlags_None)) {
+				if (ImGui::BeginTabItem("From Training Pack")) {
 
-					::strncpy(creator, iso_8859_1_to_utf8(inGameTrainingPackData.creator).c_str(), sizeof(creator));
-					::strncpy(description, iso_8859_1_to_utf8(inGameTrainingPackData.description).c_str(), sizeof(description));
-				}
-			}
-
-			if (ImGui::InputInt("Offensive players", &offensive_players, ImGuiInputTextFlags_CharsDecimal)) {
-				offensive_players = (offensive_players < 0) ? 0 : offensive_players;
-				gui_num_drills = inGameTrainingPackData.fixGUIDrills(offensive_players, defensive_players, gui_num_drills);
-			}
-			if (ImGui::InputInt("Defensive players", &defensive_players, ImGuiInputTextFlags_CharsDecimal)) {
-				defensive_players = (defensive_players < 0) ? 0 : defensive_players;
-				gui_num_drills = inGameTrainingPackData.fixGUIDrills(offensive_players, defensive_players, gui_num_drills);
-			}
-			if (ImGui::InputInt("Number of drills", &gui_num_drills, ImGuiInputTextFlags_CharsDecimal)) {
-				gui_num_drills = (gui_num_drills < 1) ? 1 : gui_num_drills;
-			}
-
-			ImGui::InputText("Filename (no spaces or extensions)", filename, IM_ARRAYSIZE(filename), ImGuiInputTextFlags_CallbackCharFilter, filenameFilter);
-			ImGui::InputText("Creator", creator, IM_ARRAYSIZE(creator), ImGuiInputTextFlags_None);
-			ImGui::InputText("Description", description, IM_ARRAYSIZE(description), ImGuiInputTextFlags_None);
-			ImGui::InputTextMultiline("Creator Notes", creatorNotes, IM_ARRAYSIZE(creatorNotes));
-			ImGui::InputText("Youtube Link", youtubeLink, IM_ARRAYSIZE(youtubeLink), ImGuiInputTextFlags_None);
-
-			if (ImGui::Button("Edit Tags##Creation")) {
-				if (!localEditTagsState.has_downloaded) {
-					localEditTagsState.enableTagsPending(enabledTags);
-					boost::thread t{ &TeamTrainingPlugin::loadAllTagsThread, this, boost::ref(localEditTagsState) };
-				}
-				else {
-					localEditTagsState.unmarkTags();
-					for (auto& tag : enabledTags) {
-						localEditTagsState.tags[tag] = true;
+					ImGui::TextWrapped("Team training packs can be generated from the single player custom training packs by separating each player's position into individual drills.");
+					ImGui::TextWrapped("This will NOT work out for any random custom training pack, you must design the pack in a specific way for this to conversion to work.");
+					ImGui::TextWrapped("Enter the number of offensive and defensive players below, and the ordering of each drill to the corresponding player position will show.");
+					ImGui::TextWrapped("Using the custom training pack creator within the game, setup each drill using this pattern.");
+					ImGui::TextWrapped("After creating the custom training pack, load the pack up in game, fill in all of the details below, then click the convert button.");
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
+					ImGui::TextWrapped("Turn off BakkesMod's playlist shuffling, mirroring, and custom training variance before doing conversion.");
+					ImGui::TextWrapped("Number of drills is the total number of drills that will be in the final team training pack.");
+					ImGui::PopStyleColor();
+					ImGui::Separator();
+					ImGui::TextWrapped("For example, convert WayProtein's training pack by loading it with the button below, enter 2 offensive players, 0 defensive players, and 8 drills, then click convert.");
+					if (ImGui::Button("Load WayProtein's Passing (downfield left)")) {
+						cvarManager->executeCommand("sleep 1; load_training C833-6A35-A46A-7191");
 					}
-				}
+					ImGui::Separator();
 
-				ImGui::OpenPopup("Edit Tags");
-			}
-			ImGui::SameLine();
-			ImGui::TextWrapped("Tags: %s", boost::join(enabledTags, ", ").c_str());
+					if (gameWrapper->IsInCustomTraining()) {
+						if (!inGameTrainingPackData.failed && ::strcmp(inGameTrainingPackData.code, code) != 0) {
+							::strncpy(filename, inGameTrainingPackData.code, sizeof(code));
+							::strncpy(code, inGameTrainingPackData.code, sizeof(code));
+							::strncpy(creatorID, inGameTrainingPackData.creatorID, sizeof(creatorID));
+							gui_num_drills = inGameTrainingPackData.numDrills;
+							offensive_players = 1;
+							defensive_players = 0;
+							enabledTags.clear();
 
-			ShowTagsWindow(localEditTagsState, true, std::bind(&TeamTrainingPlugin::loadAllTagsThread, this, placeholders::_1),
-				[this](TagsState& state) {
-					enabledTags.clear();
-					enabledTags = state.GetEnabledTags();
-				});
-
-			ImGui::Text("Code: %s", code);
-			ImGui::Text("CreatorID: %s", creatorID);
-
-			if (ImGui::Button("Convert")) {
-				errorMsgs["Creation"].clear();
-				if (!gameWrapper->IsInCustomTraining()) {
-					errorMsgs["Creation"].push_back("Must be in custom training to do conversion.");
-				}
-				if (offensive_players + defensive_players == 0) {
-					errorMsgs["Creation"].push_back("Must have at least one player.");
-				} else if (offensive_players == 0) {
-					errorMsgs["Creation"].push_back("Must have at least on offensive player. Defense only packs are not supported at this time.");
-				}
-				if (filename[0] == '\0') {
-					errorMsgs["Creation"].push_back("Must specify a filename.");
-				}
-				if (!inGameTrainingPackData.failed && (offensive_players + defensive_players) * gui_num_drills > inGameTrainingPackData.numDrills) {
-					errorMsgs["Creation"].push_back("Not enough shots in the custom training pack to support that many team training drills: \
-						(offense + defense) * number of drills must be less than or equal to " + to_string(inGameTrainingPackData.numDrills) + ".");
-				}
-
-				OnClose();
-
-				gameWrapper->Execute([this](GameWrapper* gw) {
-					if (!gameWrapper->IsInCustomTraining()) {
-						cvarManager->log("Not in custom training");
-						return;
+							::strncpy(creator, iso_8859_1_to_utf8(inGameTrainingPackData.creator).c_str(), sizeof(creator));
+							::strncpy(description, iso_8859_1_to_utf8(inGameTrainingPackData.description).c_str(), sizeof(description));
+						}
 					}
 
-					unordered_set<string> tags;
-					for (auto it = enabledTags.begin(); it != enabledTags.end(); ++it) {
-						tags.insert(*it);
+					if (ImGui::InputInt("Offensive players", &offensive_players, ImGuiInputTextFlags_CharsDecimal)) {
+						offensive_players = (offensive_players < 0) ? 0 : offensive_players;
+						gui_num_drills = inGameTrainingPackData.fixGUIDrills(offensive_players, defensive_players, gui_num_drills);
+					}
+					if (ImGui::InputInt("Defensive players", &defensive_players, ImGuiInputTextFlags_CharsDecimal)) {
+						defensive_players = (defensive_players < 0) ? 0 : defensive_players;
+						gui_num_drills = inGameTrainingPackData.fixGUIDrills(offensive_players, defensive_players, gui_num_drills);
+					}
+					if (ImGui::InputInt("Number of drills", &gui_num_drills, ImGuiInputTextFlags_CharsDecimal)) {
+						gui_num_drills = (gui_num_drills < 1) ? 1 : gui_num_drills;
 					}
 
-					conversion_pack = TrainingPack(getPackDataPath(filename), offensive_players,
-						defensive_players, gui_num_drills, code, creator, creatorID,
-						description, creatorNotes, youtubeLink, tags);
-					conversion_pack.startNewDrill();
-					getNextShotCalled = 0;
-					getNextShot();
-					});
-			}
+					ImGui::InputText("Filename (no spaces or extensions)", filename, IM_ARRAYSIZE(filename), ImGuiInputTextFlags_CallbackCharFilter, filenameFilter);
+					ImGui::InputText("Creator", creator, IM_ARRAYSIZE(creator), ImGuiInputTextFlags_None);
+					ImGui::InputText("Description", description, IM_ARRAYSIZE(description), ImGuiInputTextFlags_None);
+					ImGui::InputTextMultiline("Creator Notes", creatorNotes, IM_ARRAYSIZE(creatorNotes));
+					ImGui::InputText("Youtube Link", youtubeLink, IM_ARRAYSIZE(youtubeLink), ImGuiInputTextFlags_None);
 
-			ImGui::Separator();
+					if (ImGui::Button("Edit Tags##Creation")) {
+						if (!localEditTagsState.has_downloaded) {
+							localEditTagsState.enableTagsPending(enabledTags);
+							boost::thread t{ &TeamTrainingPlugin::loadAllTagsThread, this, boost::ref(localEditTagsState) };
+						}
+						else {
+							localEditTagsState.unmarkTags();
+							for (auto& tag : enabledTags) {
+								localEditTagsState.tags[tag] = true;
+							}
+						}
 
-			ImGui::Text(("Drill order (repeat " + to_string(gui_num_drills) + " times):").c_str());
-			if (offensive_players > 0) {
-				ImGui::Text("Shooter");
-			}
-			for (int i = 0; i < offensive_players - 1; i++) {
-				if (i == offensive_players - 1) {
-					ImGui::Text("Passer (and starting ball position/trajectory)");
-				} else {
-					ImGui::Text("Passer");
+						ImGui::OpenPopup("Edit Tags");
+					}
+					ImGui::SameLine();
+					ImGui::TextWrapped("Tags: %s", boost::join(enabledTags, ", ").c_str());
+
+					ShowTagsWindow(localEditTagsState, true, std::bind(&TeamTrainingPlugin::loadAllTagsThread, this, placeholders::_1),
+						[this](TagsState& state) {
+							enabledTags.clear();
+							enabledTags = state.GetEnabledTags();
+						});
+
+					ImGui::Text("Code: %s", code);
+					ImGui::Text("CreatorID: %s", creatorID);
+
+					if (ImGui::Button("Convert")) {
+						errorMsgs["Creation"].clear();
+						if (!gameWrapper->IsInCustomTraining()) {
+							errorMsgs["Creation"].push_back("Must be in custom training to do conversion.");
+						}
+						if (offensive_players + defensive_players == 0) {
+							errorMsgs["Creation"].push_back("Must have at least one player.");
+						}
+						else if (offensive_players == 0) {
+							errorMsgs["Creation"].push_back("Must have at least on offensive player. Defense only packs are not supported at this time.");
+						}
+						if (filename[0] == '\0') {
+							errorMsgs["Creation"].push_back("Must specify a filename.");
+						}
+						if (!inGameTrainingPackData.failed && (offensive_players + defensive_players) * gui_num_drills > inGameTrainingPackData.numDrills) {
+							errorMsgs["Creation"].push_back("Not enough shots in the custom training pack to support that many team training drills: \
+								(offense + defense) * number of drills must be less than or equal to " + to_string(inGameTrainingPackData.numDrills) + ".");
+						}
+
+						OnClose();
+
+						gameWrapper->Execute([this](GameWrapper* gw) {
+							if (!gameWrapper->IsInCustomTraining()) {
+								cvarManager->log("Not in custom training");
+								return;
+							}
+
+							unordered_set<string> tags;
+							for (auto it = enabledTags.begin(); it != enabledTags.end(); ++it) {
+								tags.insert(*it);
+							}
+
+							conversion_pack = TrainingPack(getPackDataPath(filename), offensive_players,
+								defensive_players, gui_num_drills, code, creator, creatorID,
+								description, creatorNotes, youtubeLink, &tags);
+							conversion_pack.startNewDrill();
+							getNextShotCalled = 0;
+							getNextShot();
+							});
+					}
+
+					ImGui::Separator();
+
+					ImGui::Text(("Drill order (repeat " + to_string(gui_num_drills) + " times):").c_str());
+					if (offensive_players > 0) {
+						ImGui::Text("Shooter");
+					}
+					for (int i = 0; i < offensive_players - 1; i++) {
+						if (i == offensive_players - 1) {
+							ImGui::Text("Passer (and starting ball position/trajectory)");
+						}
+						else {
+							ImGui::Text("Passer");
+						}
+					}
+					for (int i = 0; i < defensive_players; i++) {
+						ImGui::Text("Defender");
+					}
+
+					ImGui::EndTabItem();
+				}
+
+				if (ImGui::BeginTabItem("From Replay")) {
+
+					if (packs.size() == 0) {
+						packs = getTrainingPacks();
+						filterLocalPacks(localFilterState.filters);
+					}
+
+					// TODO: Record frame by frame data for x seconds up to and including current frame.
+					//		 Determine some way to serialize this data and record it into json file. Just do it as json? Pack data as binary and base64?
+
+					ImGui::TextWrapped("Load a replay and pause playback of the replay in the spot you want to create a drill from");
+
+					ImGui::Separator();
+
+					ImGui::Text("Player Role Assignments");
+
+					ImGui::Text("Offensive Team:");
+					ImGui::SameLine();
+					ImGui::RadioButton("Blue", &offensiveTeam, 0);
+					ImGui::SameLine();
+					ImGui::RadioButton("Orange", &offensiveTeam, 1);
+
+					if (gameWrapper->IsInReplay() && replayData.dataSet && replayData.errorMsg.empty()) {
+						auto offense = offensiveTeam == 0 ? replayData.team0 : replayData.team1;
+						auto defense = offensiveTeam == 0 ? replayData.team1 : replayData.team0;
+						ImGui::Text("Offensive Players:");
+						ImGui::Indent(20);
+						for (auto player : offense) {
+							if (unassignedPlayers.find(player.id) != unassignedPlayers.end())
+								continue;
+							ImGui::Text("Player: %s", player.name);
+							ImGui::SameLine();
+							if (ImGui::Button(string("Unassign##" + player.id).c_str())) {
+								unassignedPlayers[player.id] = player;
+							}
+						}
+						ImGui::Unindent();
+						ImGui::Text("Defensive Players:");
+						ImGui::Indent(20);
+						for (auto player : defense) {
+							if (unassignedPlayers.find(player.id) != unassignedPlayers.end())
+								continue;
+							ImGui::Text("Player: %s", player.name);
+							ImGui::SameLine();
+							if (ImGui::Button(string("Unassign##" + player.id).c_str())) {
+								unassignedPlayers[player.id] = player;
+							}
+						}
+						ImGui::Unindent();
+						if (unassignedPlayers.size() > 0) {
+							ImGui::Text("Unassigned:");
+							ImGui::Indent(20);
+							auto it = unassignedPlayers.begin();
+							while (it != unassignedPlayers.end()) {
+								ImGui::Text("Player: %s", it->second.name);
+								ImGui::SameLine();
+								if (ImGui::Button(string("Reassign##" + it->second.id).c_str())) {
+									it = unassignedPlayers.erase(it);
+								}
+								else {
+									++it;
+								}
+							}
+							ImGui::Unindent();
+						}
+					}
+					else {
+						ImGui::TextWrapped("Either no replay is currently loaded, or the plugin failed to retrieve the replay data.");
+						if (!replayData.errorMsg.empty()) {
+							ImGui::TextWrapped("An error occurred while trying to load replay data: %s", replayData.errorMsg.c_str());
+						}
+					}
+
+					if (ImGui::Button("Force Reload Replay Data")) {
+						gameWrapper->Execute([this](GameWrapper* gw) { onReplayLoaded("forced"); });
+					}
+
+					ImGui::Separator();
+
+					ImGui::Checkbox("Append to existing training pack", &appendToExistingPack);
+					if (appendToExistingPack) {
+						ImGui::TextWrapped("In order to append to an existing training pack, the training pack's number of offensive players must be equal to the number of offensive players you're recording from this replay through the role assignments below.");
+						ImGui::TextWrapped("You can only append to training packs that have already been converted to the plugin's training pack format (only those packs are listed below). These packs will show the \"Load Team Training pack\" button when selected in the selection tab. If you'd like to append this to a pack that isn't listed below, you will need to convert it to the plugin's training pack format first using the \"From Training Pack\" tab.");
+						ImGui::Separator();
+
+						ImGui::BeginChild("left pane", ImVec2(300, 200), true);
+
+						int i = 0;
+						for (auto pack : packsForAppend) {
+							if (ImGui::Selectable((pack->description + "##" + to_string(i) + "Append").c_str(), createFromReplaySelectedPackIdx == i)) {
+								createFromReplaySelectedPackIdx = i;
+							}
+							if (createFromReplaySelectedPackIdx == i) {
+								ImGui::SetItemDefaultFocus();
+							}
+							i++;
+						}
+						ImGui::EndChild();
+						ImGui::SameLine();
+
+						/*if (createFromReplaySelectedPackIdx >= cachedPackNamesForAppend.size()) createFromReplaySelectedPackIdx = 0;
+						ImGui::ListBox("Pack to append to", &createFromReplaySelectedPackIdx, &cachedPackNamesForAppend[0], cachedPackNamesForAppend.size());
+
+						ImGui::EndChild();
+						ImGui::SameLine();*/
+
+						ImGui::BeginGroup();
+						TrainingPack* selectedPack = packsForAppend[createFromReplaySelectedPackIdx];
+						ImGui::Text("Pack Details:");
+						ImGui::TextWrapped(("Creator: " + selectedPack->creator).c_str());
+						ImGui::TextWrapped(("Offense: " + to_string(selectedPack->offense)).c_str());
+						ImGui::TextWrapped(("Defense: " + to_string(selectedPack->defense)).c_str());
+						ImGui::TextWrapped(("Drills: " + to_string(selectedPack->drills.size())).c_str());
+
+						ImGui::SameLine();
+						ImGui::EndGroup();
+
+						ImGui::Separator();
+					} else {
+						// TODO: CreatorID
+						ImGui::InputText("Filename (no spaces or extensions)", filename, IM_ARRAYSIZE(filename), ImGuiInputTextFlags_CallbackCharFilter, filenameFilter);
+						ImGui::InputText("Creator", creator, IM_ARRAYSIZE(creator), ImGuiInputTextFlags_None);
+						ImGui::InputText("Description", description, IM_ARRAYSIZE(description), ImGuiInputTextFlags_None);
+						ImGui::InputTextMultiline("Creator Notes", creatorNotes, IM_ARRAYSIZE(creatorNotes));
+						ImGui::InputText("Youtube Link", youtubeLink, IM_ARRAYSIZE(youtubeLink), ImGuiInputTextFlags_None);
+					}
+
+					if (ImGui::Button("Create Drill##CreateFromReplay")) {
+						errorMsgs["Creation"].clear();
+						gameWrapper->Execute([this](GameWrapper* gw) {
+							if (filename[0] == '\0') {
+								errorMsgs["Creation"].push_back("Must specify a filename.");
+								return;
+							}
+
+							if (unassignedPlayers.size() == (replayData.team0.size() + replayData.team1.size())) {
+								errorMsgs["Creation"].push_back("Must assign at least one player");
+								return;
+							}
+
+							if (!gameWrapper->IsInReplay()) {
+								errorMsgs["Creation"].push_back("Must have a replay loaded");
+								return;
+							}
+							auto replay = gameWrapper->GetGameEventAsReplay();
+							if (replay.IsNull()) {
+								errorMsgs["Creation"].push_back("Replay is null? Try again.");
+								return;
+							}
+
+							TrainingPackDrill drill;
+							auto cars = replay.GetCars();
+							if (cars.IsNull()) {
+								errorMsgs["Creation"].push_back("Cars array is null. Cannot proceed. Try again.");
+								return;
+							}
+
+							auto ball = replay.GetBall();
+							if (ball.IsNull()) {
+								errorMsgs["Creation"].push_back("Ball is null? Cannot proceed. Try again.");
+								return;
+							}
+							drill.ball.fromBall(ball);
+
+							auto offense = offensiveTeam == 0 ? replayData.team0 : replayData.team1;
+							auto defense = offensiveTeam == 0 ? replayData.team1 : replayData.team0;
+							bool shooterSet = false;
+
+							// Find shooter in offense, since some offensive players may have been unassigned
+							string shooterId = "";
+							for (auto player : offense) {
+								if (unassignedPlayers.find(player.id) == unassignedPlayers.end()) {
+									shooterId = player.id;
+									break;
+								}
+							}
+
+							for (int i = 0; i < cars.Count(); i++) {
+								auto car = cars.Get(i);
+								if (car.IsNull()) {
+									errorMsgs["Creation"].push_back("One of the cars are null? Cannot proceed. Try again.");
+									return;
+								}
+
+								auto pri = car.GetPRI();
+								if (pri.IsNull()) {
+									errorMsgs["Creation"].push_back("One of the players PRIs are null? Cannot proceed. Try again.");
+									return;
+								}
+
+								auto uid = pri.GetUniqueIdWrapper().GetIdString();
+								if (unassignedPlayers.find(uid) != unassignedPlayers.end()) {
+									continue;
+								}
+
+								if (car.GetTeamNum2() == offensiveTeam) {
+									if (!shooterId.empty() || shooterId.compare(uid) == 0) {
+										shooterSet = true;
+										drill.shooter.fromCar(car);
+									}
+									else {
+										drill.passers.push_back(TrainingPackPlayer(car));
+									}
+								}
+								else {
+									drill.defenders.push_back(TrainingPackPlayer(car));
+								}
+							}
+
+							if ((!shooterSet && !shooterId.empty()) ||
+								(drill.passers.size() + drill.defenders.size()) != (offense.size() - 1 + defense.size() - unassignedPlayers.size())) {
+								errorMsgs["Creation"].push_back("Failed to identify one of the players. Sometimes this happens if a player was just demoed. If this is the case, unassign that player. Otherwise, try to force replay data reload.");
+								onReplayLoaded("forced");
+								return;
+							}
+
+							cvarManager->log(getPackDataPath(filename));
+							if (appendToExistingPack) {
+								auto pack = TrainingPack(getPackDataPath(cachedPackNamesForAppend[createFromReplaySelectedPackIdx]));
+								if (pack.offense != drill.passers.size() + 1) {
+									errorMsgs["Creation"].push_back("Cannot append drill to selected training pack. The number of offensive players in the replay (" +
+										to_string(drill.passers.size() + 1) + ") must match the training pack's offensive players (" + to_string(pack.offense) + ").");
+									return;
+								}
+
+								if (drill.passers.size() == 0 && pack.offense == 0 && pack.defense != drill.defenders.size()) {
+									errorMsgs["Creation"].push_back("Cannot append drill to selected training pack. Since the pack's offensive players is 0, the number of defensive players in the replay (" +
+										to_string(drill.defenders.size()) + ") must match the training pack's defensive players (" + to_string(pack.defense) + ").");
+									return;
+								}
+
+								pack.addDrill(drill);
+								pack.save();
+								packs.clear();
+								gameWrapper->Toast("Team Training", "Drill added to existing training pack " + string(filename), "teamtraining1");
+							} else {
+								auto fpath = getPackDataPath(filename);
+								if (fs::exists(fpath)) {
+									errorMsgs["Creation"].push_back("Cannot create new training pack. A training pack with that filename already exists.");
+									return;
+								}
+								auto pack = TrainingPack(fpath, drill.defenders.size(),
+									drill.defenders.size(), 0, "", creator, creatorID, description,
+									creatorNotes, youtubeLink, nullptr);
+								pack.addDrill(drill);
+								pack.save();
+								packs.clear();
+								gameWrapper->Toast("Team Training", "Drill added to new training pack " + string(filename), "teamtraining1");
+							}
+							});
+
+						ImGui::EndTabItem();
+					}
 				}
 			}
-			for (int i = 0; i < defensive_players; i++) {
-				ImGui::Text("Defender");
-			}
+			ImGui::EndTabBar();
 
 			ImGui::EndTabItem();
 		}
@@ -595,6 +861,10 @@ void TeamTrainingPlugin::Render()
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255, 0, 0, 255));
 			ImGui::TextWrapped("The v0.3.0 update introduces many features that I have been working on for the past 4-5 months. If you notice any issues at all, please let me know as there are definitely some bugs that need to be worked out.");
 			ImGui::PopStyleColor();
+
+			ImGui::TextWrapped("v0.3.3 (Apr 19 2021");
+			ImGui::TextWrapped("Changelog:");
+			ImGui::TextWrapped("Added ability to create drills from repalys");
 
 			ImGui::TextWrapped("v0.3.2 (Feb 19 2021)");
 			ImGui::TextWrapped("Changelog:");

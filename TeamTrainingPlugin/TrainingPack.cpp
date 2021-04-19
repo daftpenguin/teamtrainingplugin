@@ -11,13 +11,15 @@ TrainingPack::TrainingPack() : TrainingPack(fs::path()) {};
 
 TrainingPack::TrainingPack(fs::path filepath, int offense, int defense, int numDrills, string code,
 	string creator, string creatorID, string description, string notes,
-	string youtube, unordered_set<string> tags) :
+	string youtube, unordered_set<string>* tags) :
 	filepath(filepath), offense(offense), defense(defense), numDrills(numDrills), expected_drills(numDrills),
 	code(code), creator(creator), creatorID(creatorID), description(description), notes(notes), youtube(youtube),
 	uploader(""), uploaderID(""), uploadID(NO_UPLOAD_ID), players_added(0)
 {
-	for (auto tag : tags) {
-		this->tags.insert(tag);
+	if (tags != nullptr) {
+		for (auto tag : *tags) {
+			this->tags.insert(tag);
+		}
 	}
 }
 
@@ -144,6 +146,12 @@ bool TrainingPack::allPlayersInDrillAdded()
 bool TrainingPack::expectingMoreDrills()
 {
 	return (drills.size() < expected_drills);
+}
+
+void TrainingPack::addDrill(TrainingPackDrill &drill)
+{
+	drills.push_back(drill);
+	numDrills += 1;
 }
 
 // Sets tags to given tags, and returns true if they are different than the current tags

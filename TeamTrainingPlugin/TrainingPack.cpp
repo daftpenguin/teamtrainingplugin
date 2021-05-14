@@ -35,6 +35,7 @@ TrainingPack::TrainingPack(fs::path filepath) : filepath(filepath), version(0), 
 
 	if (!fs::exists(filepath)) {
 		errorMsg = "Pack not found";
+		return;
 	}
 
 	ifstream inFile;

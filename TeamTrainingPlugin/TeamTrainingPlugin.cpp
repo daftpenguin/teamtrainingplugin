@@ -272,9 +272,9 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 
 	bool firstPack = pack == NULL;
 	this->pack = std::make_shared<TrainingPack>(getPackDataPath(params[1]));
-	if (this->pack->errorMsg != "") {
-		this->pack = NULL;
+	if (!this->pack->errorMsg.empty()) {
 		cvarManager->log("Error opening training pack: " + this->pack->errorMsg);
+		this->pack = NULL;
 		return;
 	}
 
@@ -303,7 +303,7 @@ void TeamTrainingPlugin::onLoadTrainingPack(std::vector<std::string> params)
 		return;
 	}
 
-	int carCount = server.GetCars().Count();
+	int carCount = cars.Count();
 	if (player_order.size() < carCount) {
 		player_order.clear();
 		for (int i = 0; i < carCount; i++) {

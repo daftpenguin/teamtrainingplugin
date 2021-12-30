@@ -591,7 +591,7 @@ void TeamTrainingPlugin::Render()
 						for (auto player : offense) {
 							if (unassignedPlayers.find(player.id) != unassignedPlayers.end())
 								continue;
-							ImGui::Text("Player: %s", player.name);
+							ImGui::Text("Player: %s", player.name.c_str());
 							ImGui::SameLine();
 							if (ImGui::Button(string("Unassign##" + player.id).c_str())) {
 								unassignedPlayers[player.id] = player;
@@ -603,9 +603,9 @@ void TeamTrainingPlugin::Render()
 						for (auto player : defense) {
 							if (unassignedPlayers.find(player.id) != unassignedPlayers.end())
 								continue;
-							ImGui::Text("Player: %s", player.name);
+							ImGui::Text("Player: %s", player.name.c_str());
 							ImGui::SameLine();
-							if (ImGui::Button(string("Unassign##" + player.id).c_str())) {
+							if (ImGui::Button(string("Unassign##Defence" + player.id).c_str())) {
 								unassignedPlayers[player.id] = player;
 							}
 						}
